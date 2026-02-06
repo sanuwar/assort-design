@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Document {{ document.id }} - Asort Design{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>Document #{{ document.id }}</h2>
+    <p class="muted">Source: {{ document.source_type }}</p>
+    <p>{{ document.content }}</p>
+  </div>
+
+  <div class="card">
+    <h3>Tags</h3>
+    {% if tags %}
+      <ul>
+        {% for tag in tags %}
+          <li>{{ tag.name }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No tags yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Quiz Questions</h3>
+    {% if questions %}
+      <ul>
+        {% for q in questions %}
+          <li>{{ q.question_text }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No questions yet.</p>
+    {% endif %}
+  </div>
+{% endblock %}

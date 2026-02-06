@@ -2,6 +2,14 @@
 git switch -c feature/agent-profiles
 git push -u origin feature/agent-profiles
 
+Ctrl+Shift+P → Python: Select Interpreter
+Pick: python.exe
+
+Ctrl+Shift+P → Developer: Reload Window
+
+activating venv:
+C:\Users\sanuw\AsortDesing\.venv\Scripts\Activate.ps1
+
 
 # 1) Create virtual environment
 python -m venv .venv

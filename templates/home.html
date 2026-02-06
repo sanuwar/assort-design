@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Asort Design - Home{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>New Document</h2>
+    <p class="muted">Paste text, enter a URL, or use the sample content.</p>
+    {% if error %}
+      <p class="error">{{ error }}</p>
+    {% endif %}
+    <form method="post" action="/web/documents">
+      <div class="row">
+        <div>
+          <label for="input_text">Paste Text</label>
+          <textarea id="input_text" name="input_text" placeholder="Paste text here..."></textarea>
+        </div>
+        <div>
+          <label for="input_url">URL</label>
+          <input id="input_url" name="input_url" type="text" placeholder="https://example.com/article" />
+          <div style="margin-top: 16px;">
+            <label for="audience">Audience</label>
+            <select id="audience" name="audience">
+              {% for aud in audiences %}
+                <option value="{{ aud }}">{{ aud }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="actions">
+            <label>
+              <input type="checkbox" name="use_sample" />
+              Use sample content
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="button" type="submit">Create Document</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Sample Content Preview</h3>
+    <p class="muted">{{ sample_text }}</p>
+  </div>
+{% endblock %}

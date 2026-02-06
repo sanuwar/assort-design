@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Job {{ job.id }} - Asort Design{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>Job #{{ job.id }}</h2>
+    <p>
+      <span class="badge">{{ job.audience or job.selected_audience }}</span>
+      <span class="muted">Status: {{ job.status }}</span>
+    </p>
+    <div class="actions">
+      <form method="post" action="/web/jobs/{{ job.id }}/run">
+        <button class="button" type="submit">Run Pipeline</button>
+      </form>
+      {% if document %}
+        <a class="button" href="/web/documents/{{ document.id }}">View Document</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Attempts</h3>
+    {% if attempts %}
+      <ul>
+        {% for attempt in attempts %}
+          <li>
+            Attempt {{ attempt.attempt_no }} —
+            {% if attempt.passed %}
+              Passed
+            {% else %}
+              Failed
+            {% endif %}
+            <div class="muted">{{ attempt.generated_summary }}</div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No attempts yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Tags</h3>
+    {% if tags %}
+      <ul>
+        {% for tag in tags %}
+          <li>{{ tag.name }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No tags yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Quiz Questions</h3>
+    {% if questions %}
+      <ul>
+        {% for q in questions %}
+          <li>{{ q.question_text }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No questions yet.</p>
+    {% endif %}
+  </div>
+{% endblock %}
