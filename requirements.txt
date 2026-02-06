@@ -1,1 +1,11 @@
+fastapi
+jinja2
+sqlmodel
+uvicorn[standard]
+httpx
+beautifulsoup4
+lxml
+langgraph
+openai
+python-multipart
 pyyaml
