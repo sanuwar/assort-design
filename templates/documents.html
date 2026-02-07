@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Documents - Asort Design{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>Documents</h2>
+    <p class="muted">Browse recent documents and filter by route.</p>
+    <div class="actions">
+      <a class="button" href="/web">New Document</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Route Filters</h3>
+    <ul>
+      <li>
+        <a href="/web/documents">
+          <strong>All</strong>
+          {% if selected_audience == "all" %}
+            <span class="muted">(selected)</span>
+          {% endif %}
+        </a>
+      </li>
+      {% for aud in audiences %}
+        <li>
+          <a href="/web/documents?audience={{ aud }}">
+            <strong>{{ audience_display.get(aud, aud) }}</strong>:
+            {{ route_counts.get(aud, 0) }}
+            {% if selected_audience == aud %}
+              <span class="muted">(selected)</span>
+            {% endif %}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Recent Documents</h3>
+    {% if documents %}
+      <ul>
+        {% for doc in documents %}
+          <li>
+            <a class="link-card" href="/web/jobs/{{ doc.job_id }}">
+              <div><strong>Route:</strong> {{ audience_display.get(doc.audience, doc.audience) }} • <span class="muted">{{ doc.status }}</span></div>
+              <div class="muted">{{ doc.snippet }}</div>
+              {% if doc.summary %}
+                <div><strong>One-line summary:</strong> {{ doc.summary }}</div>
+              {% else %}
+                <div class="muted">No summary yet.</div>
+              {% endif %}
+            </a>
+            <div class="actions">
+              <a class="button" href="/web/jobs/{{ doc.job_id }}">Analyze Now</a>
+              <a class="button" href="/web/documents/{{ doc.document_id }}">View Source</a>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No documents found for this filter.</p>
+    {% endif %}
+  </div>
+{% endblock %}

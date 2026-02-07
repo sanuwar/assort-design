@@ -1,3 +1,13 @@
+routing:
+  auto_router_prompt: |-
+    Classify the audience for the provided document. Choose exactly one of:
+    commercial, medical_affairs, r_and_d, cross_functional.
+
+    Output strict JSON only with the following schema:
+    {"audience":"commercial|medical_affairs|r_and_d|cross_functional","confidence":0.0-1.0,"reasons":["..."]}
+
+    Do not include any extra keys or text.
+  low_confidence_threshold: 0.58
 audiences:
   commercial:
     display_name: "Commercial"
@@ -51,19 +61,9 @@ audiences:
       - Risks
       - Next Steps
     default_max_words: 200
-routing:
-  auto_router_prompt: |-
-    Classify the audience for the provided document. Choose exactly one of:
-    commercial, medical_affairs, r_and_d, cross_functional.
-
-    Output strict JSON only with the following schema:
-    {"audience":"commercial|medical_affairs|r_and_d|cross_functional","confidence":0.0-1.0,"reasons":["..."]}
-
-    Do not include any extra keys or text.
-  low_confidence_threshold: 0.58
 evaluation:
   evaluator_prompt: |-
-    Evaluate the generated summary against required sections and word count constraints.
+    Evaluate the one-line summary and decision bullets against required sections and word count constraints.
     Return strict JSON only with this schema:
     {
       "pass": true/false,
@@ -73,5 +73,22 @@ evaluation:
       "fix_instructions": ["..."]
     }
 
+    The decision bullets must be 3 to 5 items and include every required section.
     If constraints are met, pass must be true and fail_reasons should be empty.
+    Do not include any extra keys or text.
+generation:
+  prompt: |-
+    Produce structured outputs based on the document.
+
+    Required sections: {{required_sections}}
+    Max words: {{max_words}}
+    Revision instructions (if any): {{fix_instructions}}
+
+    Output strict JSON only with this schema:
+    {"one_line_summary":"...","tags":["..."],"key_clues":["..."],"decision_bullets":["..."],"mind_map":"..."}
+
+    One-line summary: exactly one sentence.
+    Key clues: 3-7 short hints.
+    Decision bullets: 3-5 bullets, each prefixed by a required section name and a colon.
+    Mind map: Mermaid mindmap syntax.
     Do not include any extra keys or text.

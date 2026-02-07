@@ -53,6 +53,14 @@ def get_evaluation_config() -> Dict[str, Any]:
     return evaluation
 
 
+def get_generation_config() -> Dict[str, Any]:
+    profiles = load_profiles()
+    generation = profiles.get("generation")
+    if not isinstance(generation, dict):
+        raise ValueError("generation config must be a mapping in agent_profiles.yaml.")
+    return generation
+
+
 def _validate_profiles(data: Dict[str, Any]) -> None:
     audiences = data.get("audiences")
     if not isinstance(audiences, dict) or not audiences:
@@ -118,3 +126,11 @@ def _validate_profiles(data: Dict[str, Any]) -> None:
         "evaluator_prompt"
     ].strip():
         raise ValueError("evaluation.evaluator_prompt must be a non-empty string.")
+
+    generation = data.get("generation")
+    if not isinstance(generation, dict):
+        raise ValueError("'generation' must be a mapping.")
+    if not isinstance(generation.get("prompt"), str) or not generation[
+        "prompt"
+    ].strip():
+        raise ValueError("generation.prompt must be a non-empty string.")

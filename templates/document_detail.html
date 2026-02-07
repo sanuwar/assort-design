@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Document {{ document.id }} - Asort Design{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>Document #{{ document.id }}</h2>
+    <p class="muted">
+      Source: {{ document.source_type }}
+      {% if job %}
+        • Audience: {{ job.audience or job.selected_audience }}
+        • Status: {{ job.status }}
+      {% endif %}
+    </p>
+    <p>{{ document.content }}</p>
+  </div>
+
+  <div class="card">
+    <h3>One-line Summary</h3>
+    {% if final_summary and final_summary.one_line_summary %}
+      <p>{{ final_summary.one_line_summary }}</p>
+    {% else %}
+      <p class="muted">No accepted summary yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Decision Bullets</h3>
+    <p class="muted">Expected: 3–5 bullets.</p>
+    {% if final_summary and final_summary.decision_bullets %}
+      <ul>
+        {% for bullet in final_summary.decision_bullets %}
+          <li>{{ bullet }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No decision bullets yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Mind Map</h3>
+    {% if final_summary and final_summary.mind_map %}
+      <pre class="mermaid">{{ final_summary.mind_map }}</pre>
+      <p class="muted">If the diagram doesn't render, ensure Mermaid is available.</p>
+    {% else %}
+      <p class="muted">No mind map yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Tags</h3>
+    {% if tags %}
+      <ul>
+        {% for tag in tags %}
+          <li>{{ tag.name }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No tags yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Key Clues</h3>
+    {% if clues %}
+      <ul>
+        {% for clue in clues %}
+          <li>{{ clue.clue_text }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No clues yet.</p>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Asort Design - Home{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>Asort Design: Sort, Summarize, Decide</h2>
+    <p class="muted">
+      This workspace routes your content to the right audience and returns a one-line summary,
+      decision bullets, key clues, tags, and a mind map to speed up understanding.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Start a New Analysis</h2>
+    <p class="muted">Paste text, enter a URL, or use the sample content.</p>
+    {% if error %}
+      <p class="error">{{ error }}</p>
+    {% endif %}
+    <form method="post" action="/web/documents">
+      <div class="row">
+        <div>
+          <label for="input_text">Paste Text</label>
+          <textarea id="input_text" name="input_text" placeholder="Paste text here..."></textarea>
+        </div>
+        <div>
+          <label for="input_url">URL</label>
+          <input id="input_url" name="input_url" type="text" placeholder="https://example.com/article" />
+          <div style="margin-top: 16px;">
+            <label for="audience">Audience</label>
+            <select id="audience" name="audience">
+              {% for aud in audiences %}
+                <option value="{{ aud }}" {% if aud == selected_audience %}selected{% endif %}>
+                  {{ audience_display.get(aud, aud) }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="actions">
+            <label>
+              <input type="checkbox" name="use_sample" />
+              Use sample content
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="button" type="submit">Sort &amp; Summarize</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h3>Recent Documents</h3>
+      {% if history %}
+        <ul>
+          {% for item in history %}
+            <li>
+              {% if item.job_id %}
+                <a class="link-card" href="/web/jobs/{{ item.job_id }}">
+                  <div><strong>Route:</strong> {{ audience_display.get(item.audience, item.audience) }} • <span class="muted">{{ item.status }}</span></div>
+                  <div class="muted">{{ item.snippet }}</div>
+                  {% if item.summary %}
+                    <div><strong>One-line summary:</strong> {{ item.summary }}</div>
+                  {% else %}
+                    <div class="muted">No summary yet.</div>
+                  {% endif %}
+                </a>
+              {% else %}
+                <a class="link-card" href="/web/documents/{{ item.document_id }}">
+                  <div><strong>Route:</strong> {{ audience_display.get(item.audience, item.audience) }} • <span class="muted">{{ item.status }}</span></div>
+                  <div class="muted">{{ item.snippet }}</div>
+                  {% if item.summary %}
+                    <div><strong>One-line summary:</strong> {{ item.summary }}</div>
+                  {% else %}
+                    <div class="muted">No summary yet.</div>
+                  {% endif %}
+                </a>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">No documents yet.</p>
+      {% endif %}
+    </div>
+    <div class="card">
+      <h3>Route Totals</h3>
+      <ul>
+        {% for aud in audiences %}
+          <li>
+            <a href="/web/documents?audience={{ aud }}">
+              <strong>{{ audience_display.get(aud, aud) }}</strong>:
+              {{ route_counts.get(aud, 0) }}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+{% endblock %}
