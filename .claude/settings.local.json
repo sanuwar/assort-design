@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest --collect-only)",
+      "Bash(python -m pytest:*)",
+      "Bash(find:*)",
+      "Bash(python:*)",
+      "Bash(OPENAI_API_KEY=test python:*)",
+      "Bash(pip show:*)",
+      "Bash(grep:*)",
+      "Read(//c/AsortDesing/**)"
+    ]
+  }
+}
