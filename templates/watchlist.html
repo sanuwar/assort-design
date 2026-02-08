@@ -14,7 +14,15 @@
     {% for item in items %}
       <div class="card">
         <div class="muted">
-          {{ item.audience }} •
+          <span
+            class="{% if item.audience == 'Cross-Functional' %}tooltip{% endif %}"
+            {% if item.audience == 'Cross-Functional' %}
+              data-tip="Mixed stakeholders (see request for details)"
+            {% endif %}
+          >
+            {{ item.audience }}
+          </span>
+          •
           <span class="status-chip status-{{ item.status }}">{{ item.status }}</span>
           • {{ item.created_at }}
         </div>

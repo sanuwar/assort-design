@@ -41,3 +41,9 @@ without relying on the CDN fallback.
 ```powershell
 Remove-Item -Force .\data\asort_design.db
 ```
+to see tables and rows this is the command
+
+python -c 'import sqlite3; conn=sqlite3.connect("data/asort_design.db"); print(conn.execute("SELECT name FROM sqlite_master WHERE type=''table''").fetchall())'
+
+for writing mermaid text code in graph.mmd file
+python -m app.graph --mermaid | Out-File -Encoding utf8 docs/graph.md

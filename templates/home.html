@@ -56,7 +56,13 @@
             <label for="audience">Audience (Auto by default)</label>
             <select id="audience" name="audience">
               {% for aud in audiences %}
-                <option value="{{ aud }}" {% if aud == selected_audience %}selected{% endif %}>
+                <option
+                  value="{{ aud }}"
+                  {% if aud == selected_audience %}selected{% endif %}
+                  {% if audience_display.get(aud, aud) == 'Cross-Functional' %}
+                    title="Mixed stakeholders (auto-routed)"
+                  {% endif %}
+                >
                   {{ audience_display.get(aud, aud) }}
                 </option>
               {% endfor %}
@@ -86,7 +92,15 @@
               {% if item.job_id %}
                 <a class="link-card" href="/web/jobs/{{ item.job_id }}">
               <div>
-                <strong>Route:</strong> {{ audience_display.get(item.audience, item.audience) }}
+                <strong>Route:</strong>
+                <span
+                  class="{% if audience_display.get(item.audience, item.audience) == 'Cross-Functional' %}tooltip{% endif %}"
+                  {% if audience_display.get(item.audience, item.audience) == 'Cross-Functional' %}
+                    data-tip="Mixed stakeholders (see request for details)"
+                  {% endif %}
+                >
+                  {{ audience_display.get(item.audience, item.audience) }}
+                </span>
                 • <span class="status-chip status-{{ item.status }}">{{ item.status }}</span>
               </div>
                   <div class="muted">{{ item.snippet }}</div>
@@ -99,7 +113,15 @@
               {% else %}
                 <a class="link-card" href="/web/documents/{{ item.document_id }}">
                   <div>
-                    <strong>Route:</strong> {{ audience_display.get(item.audience, item.audience) }}
+                    <strong>Route:</strong>
+                    <span
+                      class="{% if audience_display.get(item.audience, item.audience) == 'Cross-Functional' %}tooltip{% endif %}"
+                      {% if audience_display.get(item.audience, item.audience) == 'Cross-Functional' %}
+                        data-tip="Mixed stakeholders (see request for details)"
+                      {% endif %}
+                    >
+                      {{ audience_display.get(item.audience, item.audience) }}
+                    </span>
                     • <span class="status-chip status-{{ item.status }}">{{ item.status }}</span>
                   </div>
                   <div class="muted">{{ item.snippet }}</div>
@@ -123,7 +145,14 @@
         {% for aud in audiences %}
           <li>
             <a href="/web/documents?audience={{ aud }}">
-              <strong>{{ audience_display.get(aud, aud) }}</strong>:
+              <strong
+                class="{% if audience_display.get(aud, aud) == 'Cross-Functional' %}tooltip{% endif %}"
+                {% if audience_display.get(aud, aud) == 'Cross-Functional' %}
+                  data-tip="Mixed stakeholders (see request for details)"
+                {% endif %}
+              >
+                {{ audience_display.get(aud, aud) }}
+              </strong>:
               {{ route_counts.get(aud, 0) }}
             </a>
           </li>

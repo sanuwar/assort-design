@@ -16,6 +16,38 @@ from app.llm import evaluate_content, generate_content, route_audience
 from app.models import Document, DocumentClue, DocumentTag, Job, JobAttempt, Tag
 
 
+def _build_graph(
+    route_audience_node,
+    specialist_generate_node,
+    evaluate_node,
+    persist_attempt_node,
+    revise_node,
+    persist_results_node,
+    next_step,
+) -> Any:
+    graph = StateGraph(dict)
+    graph.add_node("route_audience", route_audience_node)
+    graph.add_node("specialist_generate", specialist_generate_node)
+    graph.add_node("evaluate", evaluate_node)
+    graph.add_node("persist_attempt", persist_attempt_node)
+    graph.add_node("revise", revise_node)
+    graph.add_node("persist_results", persist_results_node)
+
+    graph.set_entry_point("route_audience")
+    graph.add_edge("route_audience", "specialist_generate")
+    graph.add_edge("specialist_generate", "evaluate")
+    graph.add_edge("evaluate", "persist_attempt")
+    graph.add_conditional_edges(
+        "persist_attempt",
+        next_step,
+        {"revise": "revise", "persist_results": "persist_results"},
+    )
+    graph.add_edge("revise", "specialist_generate")
+    graph.add_edge("persist_results", END)
+
+    return graph.compile()
+
+
 def run_job_pipeline(session: Session, job: Job) -> Job:
     """Run routing -> generate -> evaluate -> revise -> persist via LangGraph."""
     document = session.get(Document, job.document_id)
@@ -35,13 +67,38 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
         new_state = dict(state)
         if job.selected_audience != "auto":
             audience = job.selected_audience
+            job.routing_confidence = 1.0
+            if audience == "cross_functional":
+                job.routing_candidates_json = "[]"
+            else:
+                job.routing_candidates_json = json.dumps([audience])
+            job.routing_reasons_json = json.dumps(["Manual override"])
         else:
             result = route_audience(routing_config["auto_router_prompt"], document.content)
             confidence = float(result.get("confidence") or 0.0)
             audience = result.get("audience", "cross_functional")
+            reasons = result.get("reasons")
+            if isinstance(reasons, list):
+                reasons = [str(r).strip() for r in reasons if str(r).strip()]
+            else:
+                reasons = []
+            candidates = result.get("candidates")
+            allowed = {"commercial", "medical_affairs", "r_and_d"}
+            if isinstance(candidates, list):
+                candidates = [c for c in candidates if c in allowed]
+            else:
+                candidates = []
+            candidates = _filter_candidates_by_keywords(document.content, candidates)
+            if not candidates and audience in allowed:
+                candidates = _filter_candidates_by_keywords(document.content, [audience])
             threshold = float(routing_config.get("low_confidence_threshold", 0.5))
             if confidence < threshold:
                 audience = "cross_functional"
+                if not reasons:
+                    reasons = ["Low confidence: routed to cross-functional."]
+            job.routing_confidence = confidence
+            job.routing_candidates_json = json.dumps(candidates)
+            job.routing_reasons_json = json.dumps(reasons[:5])
         try:
             profile = get_audience_profile(audience)
         except ValueError:
@@ -152,27 +209,15 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
             return "revise"
         return "persist_results"
 
-    graph = StateGraph(dict)
-    graph.add_node("route_audience", route_audience_node)
-    graph.add_node("specialist_generate", specialist_generate_node)
-    graph.add_node("evaluate", evaluate_node)
-    graph.add_node("persist_attempt", persist_attempt_node)
-    graph.add_node("revise", revise_node)
-    graph.add_node("persist_results", persist_results_node)
-
-    graph.set_entry_point("route_audience")
-    graph.add_edge("route_audience", "specialist_generate")
-    graph.add_edge("specialist_generate", "evaluate")
-    graph.add_edge("evaluate", "persist_attempt")
-    graph.add_conditional_edges(
-        "persist_attempt",
+    app = _build_graph(
+        route_audience_node,
+        specialist_generate_node,
+        evaluate_node,
+        persist_attempt_node,
+        revise_node,
+        persist_results_node,
         next_step,
-        {"revise": "revise", "persist_results": "persist_results"},
     )
-    graph.add_edge("revise", "specialist_generate")
-    graph.add_edge("persist_results", END)
-
-    app = graph.compile()
     try:
         app.invoke(
             {
@@ -214,6 +259,103 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
 
     session.refresh(job)
     return job
+
+
+def build_graph_for_visualization() -> Any:
+    """Build a no-op graph that mirrors the pipeline shape for visualization."""
+    def _noop(state: Dict[str, Any]) -> Dict[str, Any]:
+        return dict(state)
+
+    def _next_step(_: Dict[str, Any]) -> str:
+        return "persist_results"
+
+    return _build_graph(
+        _noop,
+        _noop,
+        _noop,
+        _noop,
+        _noop,
+        _noop,
+        _next_step,
+    )
+
+
+def _get_graph_object(compiled_graph: Any) -> Any:
+    if hasattr(compiled_graph, "get_graph"):
+        try:
+            return compiled_graph.get_graph()
+        except Exception:
+            return compiled_graph
+    return compiled_graph
+
+
+def render_graph_mermaid() -> str:
+    graph = build_graph_for_visualization()
+    graph_obj = _get_graph_object(graph)
+    if hasattr(graph_obj, "draw_mermaid"):
+        try:
+            return graph_obj.draw_mermaid()
+        except Exception:
+            pass
+    return _fallback_mermaid()
+
+
+def _fallback_mermaid() -> str:
+    return "\n".join(
+        [
+            "flowchart TD",
+            "  route_audience[route_audience] --> specialist_generate[specialist_generate]",
+            "  specialist_generate --> evaluate",
+            "  evaluate --> persist_attempt",
+            "  persist_attempt -->|revise| revise",
+            "  persist_attempt -->|persist_results| persist_results",
+            "  revise --> specialist_generate",
+            "  persist_results --> END",
+        ]
+    )
+
+
+if __name__ == "__main__":
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        description="Render the Asort Design LangGraph pipeline."
+    )
+    parser.add_argument(
+        "--mermaid",
+        action="store_true",
+        help="Print Mermaid diagram text to stdout.",
+    )
+    parser.add_argument(
+        "--png",
+        metavar="PATH",
+        help="Write a Mermaid PNG to the given path.",
+    )
+    args = parser.parse_args()
+
+    if not args.mermaid and not args.png:
+        args.mermaid = True
+
+    graph = build_graph_for_visualization()
+    graph_obj = _get_graph_object(graph)
+
+    if args.png:
+        png_bytes = None
+        if hasattr(graph_obj, "draw_mermaid_png"):
+            try:
+                png_bytes = graph_obj.draw_mermaid_png()
+            except Exception:
+                png_bytes = None
+        if png_bytes is None:
+            raise SystemExit(
+                "PNG rendering is unavailable here. Use --mermaid and preview with a Mermaid viewer."
+            )
+        with open(args.png, "wb") as handle:
+            handle.write(png_bytes)
+
+    if args.mermaid:
+        sys.stdout.write(render_graph_mermaid())
 
 
 def _replace_tags(session: Session, document_id: int, tags: List[str]) -> None:
@@ -289,3 +431,61 @@ def _format_failure_reason(exc: Exception) -> str:
     if "timeout" in lower or "timed out" in lower:
         return "LLM request timed out."
     return f"LLM request failed: {message}"
+
+# keywords are huristic sanity check. 
+def _filter_candidates_by_keywords(text: str, candidates: List[str]) -> List[str]:
+    if not text or not candidates:
+        return []
+
+    keywords = {
+        "commercial": [
+            "market",
+            "pricing",
+            "revenue",
+            "sales",
+            "commercial",
+            "launch",
+            "positioning",
+            "brand",
+            "customer",
+            "segment",
+            "demand",
+            "competition",
+        ],
+        "medical_affairs": [
+            "clinical",
+            "patient",
+            "safety",
+            "efficacy",
+            "trial",
+            "adverse",
+            "label",
+            "regulatory",
+            "outcome",
+            "physician",
+            "kol",
+            "publication",
+        ],
+        "r_and_d": [
+            "experiment",
+            "assay",
+            "protocol",
+            "method",
+            "preclinical",
+            "hypothesis",
+            "mechanism",
+            "in vivo",
+            "in vitro",
+            "model",
+            "dataset",
+            "lab",
+        ],
+    }
+
+    haystack = text.lower()
+    filtered = []
+    for candidate in candidates:
+        terms = keywords.get(candidate, [])
+        if any(term in haystack for term in terms):
+            filtered.append(candidate)
+    return filtered

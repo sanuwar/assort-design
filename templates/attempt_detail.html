@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Attempt {{ attempt.id }} - Asort Design{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>Attempt #{{ attempt.id }}</h2>
+    <p class="muted">
+      Job: {% if job %}{{ job.id }}{% else %}Unknown{% endif %}
+      • Audience: {{ attempt.audience }}
+      • Passed: {{ attempt.passed }}
+      • Created: {{ attempt.created_at }}
+    </p>
+    <div class="actions">
+      {% if job %}
+        <a class="button" href="/web/jobs/{{ job.id }}">Back to Request</a>
+      {% endif %}
+      {% if document %}
+        <a class="button" href="/web/documents/{{ document.id }}">View Source</a>
+      {% endif %}
+      <a class="button" href="/web">Back Home</a>
+    </div>
+  </div>
+
+  {% if routing_reasons %}
+    <div class="card">
+      <h3>Routing Reasons</h3>
+      <p class="muted">{{ routing_reasons | join("; ") }}</p>
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <h3>One-line Summary</h3>
+    {% if attempt.generated_one_line_summary %}
+      <p>{{ attempt.generated_one_line_summary }}</p>
+    {% else %}
+      <p class="muted">No summary recorded.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Decision Bullets</h3>
+    {% if generated_bullets %}
+      <ul>
+        {% for bullet in generated_bullets %}
+          <li>{{ bullet }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No bullets recorded.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Tags</h3>
+    {% if generated_tags %}
+      <ul>
+        {% for tag in generated_tags %}
+          <li>{{ tag }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No tags recorded.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Key Clues</h3>
+    {% if generated_clues %}
+      <ul>
+        {% for clue in generated_clues %}
+          <li>{{ clue }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No clues recorded.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Mind Map (Raw)</h3>
+    {% if attempt.generated_mindmap %}
+      <pre class="mermaid">{{ attempt.generated_mindmap }}</pre>
+    {% else %}
+      <p class="muted">No mind map recorded.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Evaluator Verdict</h3>
+    {% if evaluator_data %}
+      <pre>{{ evaluator_data | tojson(indent=2) }}</pre>
+    {% else %}
+      <p class="muted">No evaluator data recorded.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Raw JSON</h3>
+    <p class="muted">These are the JSON payloads stored per attempt.</p>
+    <pre>{{ {
+      "tags": generated_tags,
+      "key_clues": generated_clues,
+      "decision_bullets": generated_bullets,
+      "evaluator": evaluator_data
+    } | tojson(indent=2) }}</pre>
+  </div>
+{% endblock %}

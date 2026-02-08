@@ -25,7 +25,14 @@
       {% for aud in audiences %}
         <li>
           <a href="/web/documents?audience={{ aud }}">
-            <strong>{{ audience_display.get(aud, aud) }}</strong>:
+            <strong
+              class="{% if audience_display.get(aud, aud) == 'Cross-Functional' %}tooltip{% endif %}"
+              {% if audience_display.get(aud, aud) == 'Cross-Functional' %}
+                data-tip="Mixed stakeholders (see request for details)"
+              {% endif %}
+            >
+              {{ audience_display.get(aud, aud) }}
+            </strong>:
             {{ route_counts.get(aud, 0) }}
             {% if selected_audience == aud %}
               <span class="muted">(selected)</span>
@@ -44,7 +51,15 @@
           <li>
             <a class="link-card" href="/web/jobs/{{ doc.job_id }}">
               <div>
-                <strong>Route:</strong> {{ audience_display.get(doc.audience, doc.audience) }}
+                <strong>Route:</strong>
+                <span
+                  class="{% if audience_display.get(doc.audience, doc.audience) == 'Cross-Functional' %}tooltip{% endif %}"
+                  {% if audience_display.get(doc.audience, doc.audience) == 'Cross-Functional' %}
+                    data-tip="Mixed stakeholders (see request for details)"
+                  {% endif %}
+                >
+                  {{ audience_display.get(doc.audience, doc.audience) }}
+                </span>
                 • <span class="status-chip status-{{ doc.status }}">{{ doc.status }}</span>
               </div>
               <div class="muted">{{ doc.snippet }}</div>

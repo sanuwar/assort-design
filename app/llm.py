@@ -20,7 +20,7 @@ def is_mock_mode() -> bool:
 def is_langsmith_tracing_enabled() -> bool:
     return os.getenv("LANGSMITH_TRACING", "").strip().lower() in ("1", "true", "yes", "on")
 
-
+# Small factory/helper with type dict that returns an OpenAI client only if it can be used, and optionally wraps it for tracing.
 def get_client() -> Optional[OpenAI]:
     if not has_api_key():
         return None
@@ -41,7 +41,7 @@ def route_audience(router_prompt: str, document_text: str) -> Dict[str, Any]:
     user_prompt = f"Document:\n{document_text}"
     return _call_llm_json(router_prompt, user_prompt)
 
-
+# LLM-backed content generator with mock-mode fallback.
 def generate_content(
     system_prompt: str,
     generation_prompt: str,
@@ -62,6 +62,9 @@ def generate_content(
     user_prompt = f"{rendered_prompt}\n\nDocument:\n{document_text}"
     return _call_llm_json(system_prompt, user_prompt)
 
+# LLM-based evaluator for generated content (returns a JSON verdict).
+# Checks required sections and max word constraint.
+# Uses a mock fallback when demo/test mode is enabled.
 
 def evaluate_content(
     evaluator_prompt: str,
@@ -85,6 +88,9 @@ def evaluate_content(
     )
     return _call_llm_json(evaluator_prompt, user_prompt)
 
+# LLM helper: run a Responses API call and normalize the output.
+# Extracts text from the response payload and parses it into a dict.
+# Fails fast if the OpenAI client isn't configured.
 
 def _call_llm_json(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
     client = get_client()
@@ -154,12 +160,32 @@ def _render_prompt(
 def _mock_route(document_text: str) -> Dict[str, Any]:
     text = document_text.lower()
     if any(k in text for k in ["market", "sales", "commercial", "pricing"]):
-        return {"audience": "commercial", "confidence": 0.78, "reasons": ["market"]}    
+        return {
+            "audience": "commercial",
+            "confidence": 0.78,
+            "reasons": ["market"],
+            "candidates": ["commercial", "r_and_d"],
+        }
     if any(k in text for k in ["clinical", "patient", "safety", "evidence"]):
-        return {"audience": "medical_affairs", "confidence": 0.8, "reasons": ["clinical"]}
+        return {
+            "audience": "medical_affairs",
+            "confidence": 0.8,
+            "reasons": ["clinical"],
+            "candidates": ["medical_affairs", "r_and_d"],
+        }
     if any(k in text for k in ["experiment", "assay", "protocol", "method"]):
-        return {"audience": "r_and_d", "confidence": 0.76, "reasons": ["research"]}
-    return {"audience": "cross_functional", "confidence": 0.4, "reasons": ["low_signal"]}
+        return {
+            "audience": "r_and_d",
+            "confidence": 0.76,
+            "reasons": ["research"],
+            "candidates": ["r_and_d", "medical_affairs"],
+        }
+    return {
+        "audience": "cross_functional",
+        "confidence": 0.4,
+        "reasons": ["low_signal"],
+        "candidates": ["commercial", "medical_affairs"],
+    }
 
 
 def _mock_generate(

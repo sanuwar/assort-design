@@ -7,7 +7,14 @@
     <h2>
       Document #{{ document.id }}
       {% if audience_label %}
-        <span class="badge badge-inline">{{ audience_label }}</span>
+        <span
+          class="badge badge-inline{% if cross_functional_detail %} tooltip{% endif %}"
+          {% if cross_functional_detail %}
+            data-tip="{{ cross_functional_detail }}"
+          {% endif %}
+        >
+          {{ audience_label }}
+        </span>
       {% endif %}
     </h2>
     <p class="muted">
@@ -17,6 +24,19 @@
         • Status: {{ job.status }}
       {% endif %}
     </p>
+    {% if routing_confidence_pct is not none %}
+      <p class="muted">
+        Routing confidence: {{ routing_confidence_pct }}%
+        {% if routing_candidates %}
+          • Candidates: {{ routing_candidates | join(", ") }}
+        {% endif %}
+      </p>
+    {% endif %}
+    {% if routing_reasons %}
+      <p class="muted">
+        Routing reasons: {{ routing_reasons | join("; ") }}
+      </p>
+    {% endif %}
     <div class="actions">
       {% if job %}
         <a class="button" href="/web/jobs/{{ job.id }}">Back to Request</a>
@@ -70,6 +90,7 @@
     {% if final_summary and final_summary.mind_map %}
       <pre class="mermaid">{{ final_summary.mind_map }}</pre>
       <p class="muted">If the diagram doesn't render, ensure Mermaid is available.</p>
+      <p class="muted">If needed, use the in-page "View source" button on the job detail page to see the raw mind map.</p>
     {% else %}
       <p class="muted">No mind map yet.</p>
     {% endif %}

@@ -4,8 +4,10 @@ routing:
     commercial, medical_affairs, r_and_d, cross_functional.
 
     Output strict JSON only with the following schema:
-    {"audience":"commercial|medical_affairs|r_and_d|cross_functional","confidence":0.0-1.0,"reasons":["..."]}
+    {"audience":"commercial|medical_affairs|r_and_d|cross_functional","confidence":0.0-1.0,"reasons":["..."],"candidates":["commercial","medical_affairs","r_and_d"]}
 
+    Candidates should list the top 2-3 best-fit audiences (exclude cross_functional unless it is the true best-fit).
+    If confidence is low, still provide best-fit candidates based on the evidence.
     Do not include any extra keys or text.
   low_confidence_threshold: 0.58
 audiences:

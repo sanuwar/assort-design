@@ -25,6 +25,9 @@ class Job(SQLModel, table=True):
     document_id: int = Field(foreign_key="document.id")
     selected_audience: str
     audience: Optional[str] = None
+    routing_confidence: Optional[float] = None
+    routing_candidates_json: str = "[]"
+    routing_reasons_json: str = "[]"
     status: str = "pending"
     attempt_count: int = 0
     max_words: Optional[int] = None

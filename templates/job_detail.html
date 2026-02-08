@@ -6,13 +6,48 @@
   <div class="card">
     <h2>
       Request {{ job_ref }}
-      <span class="badge badge-inline">{{ audience_label }}</span>
+      <span
+        class="badge badge-inline{% if cross_functional_detail %} tooltip{% endif %}"
+        {% if cross_functional_detail %}
+          data-tip="{{ cross_functional_detail }}"
+        {% endif %}
+      >
+        {{ audience_label }}
+      </span>
     </h2>
     <p class="muted">
       Audience: {{ audience_label }} •
       <span class="status-chip status-{{ job.status }}">{{ job.status }}</span>
     </p>
+    {% if routing_confidence_pct is not none %}
+      <p class="muted">
+        Routing confidence: {{ routing_confidence_pct }}%
+        {% if routing_candidates %}
+          • Candidates: {{ routing_candidates | join(", ") }}
+        {% endif %}
+      </p>
+    {% endif %}
+    {% if routing_reasons %}
+      <p class="muted">
+        Routing reasons: {{ routing_reasons | join("; ") }}
+      </p>
+    {% endif %}
   </div>
+
+  {% if job.status == "running" %}
+    <div class="card status-banner">
+      <h3>Analysis in Progress</h3>
+      <p class="muted">Your request is being processed. This page will refresh automatically.</p>
+      <div class="progress">
+        <div class="progress-bar"></div>
+      </div>
+    </div>
+    <script>
+      setTimeout(function () {
+        window.location.reload();
+      }, 5000);
+    </script>
+  {% endif %}
 
   <div class="sticky-actions">
     <form method="post" action="/web/jobs/{{ job.id }}/run" data-loading>
@@ -86,6 +121,9 @@
               {% if not attempt.passed and attempt.fail_reasons %}
                 <div class="muted">Fail reasons: {{ attempt.fail_reasons | join(", ") }}</div>
               {% endif %}
+              <div class="actions">
+                <a class="button" href="/web/attempts/{{ attempt.attempt_id }}">View Debug</a>
+              </div>
             </li>
           {% endfor %}
         </ul>
@@ -163,6 +201,7 @@
       <div id="mindmap-section" class="hidden">
         <pre class="mermaid">{{ final_summary.mind_map }}</pre>
         <p class="muted">If the diagram doesn't render, ensure Mermaid is available.</p>
+        <p class="muted">If needed, use the in-page "View source" button to see the raw mind map.</p>
       </div>
     {% else %}
       <div id="mindmap-section" class="hidden">

@@ -14,7 +14,14 @@
       <ul>
         {% for aud, label in audience_display.items() %}
           <li>
-            <strong>{{ label }}</strong>: {{ totals.get(aud, 0) }}
+            <strong
+              class="{% if label == 'Cross-Functional' %}tooltip{% endif %}"
+              {% if label == 'Cross-Functional' %}
+                data-tip="Mixed stakeholders (see request for details)"
+              {% endif %}
+            >
+              {{ label }}
+            </strong>: {{ totals.get(aud, 0) }}
           </li>
         {% endfor %}
       </ul>
@@ -28,7 +35,14 @@
         <ul>
           {% for item in recent %}
             <li>
-              <strong>{{ item.audience }}</strong>
+              <strong
+                class="{% if item.audience == 'Cross-Functional' %}tooltip{% endif %}"
+                {% if item.audience == 'Cross-Functional' %}
+                  data-tip="Mixed stakeholders (see request for details)"
+                {% endif %}
+              >
+                {{ item.audience }}
+              </strong>
               <span class="status-chip status-{{ item.status }}">{{ item.status }}</span>
               <span class="muted"> • {{ item.created_at }}</span>
               <div class="actions">

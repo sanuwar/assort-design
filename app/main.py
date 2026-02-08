@@ -122,6 +122,21 @@ def _normalize_page(page: Optional[int]) -> int:
         return 1
     return page
 
+
+def _cross_detail_from_job(job: Job) -> Optional[str]:
+    audience_code = job.audience or job.selected_audience or "auto"
+    if _audience_display(audience_code) != "Cross-Functional":
+        return None
+    candidates = _safe_json_list(getattr(job, "routing_candidates_json", "[]"))
+    candidates_display = [
+        _audience_display(aud) for aud in candidates if isinstance(aud, str)
+    ]
+    if candidates_display:
+        return " + ".join(candidates_display)
+    if job.selected_audience != "auto":
+        return "Mixed stakeholders (manual override)"
+    return "Mixed stakeholders (auto-routed)"
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -155,7 +170,7 @@ def home(request: Request, audience: Optional[str] = None) -> HTMLResponse:
 @app.get("/web/insights", response_class=HTMLResponse)
 def insights(request: Request, page: int = 1) -> HTMLResponse:
     page = _normalize_page(page)
-    limit = 20
+    limit = 10
     offset = (page - 1) * limit
     insights_items = []
     with get_session() as session:
@@ -235,7 +250,7 @@ def routes_dashboard(request: Request) -> HTMLResponse:
 @app.get("/web/library", response_class=HTMLResponse)
 def library(request: Request, page: int = 1, q: Optional[str] = None) -> HTMLResponse:
     page = _normalize_page(page)
-    limit = 20
+    limit = 10
     offset = (page - 1) * limit
     search = (q or "").strip()
     library_items = []
@@ -568,6 +583,20 @@ def job_detail(request: Request, job_id: int) -> HTMLResponse:
 
     audience_code = job.audience or job.selected_audience or "auto"
     audience_label = _audience_display(audience_code)
+    routing_candidates = _safe_json_list(getattr(job, "routing_candidates_json", "[]"))
+    routing_candidates_display = [
+        _audience_display(aud) for aud in routing_candidates if isinstance(aud, str)
+    ]
+    routing_reasons = _safe_json_list(getattr(job, "routing_reasons_json", "[]"))
+    routing_confidence_pct = None
+    if getattr(job, "routing_confidence", None) is not None:
+        routing_confidence_pct = int(round(float(job.routing_confidence) * 100))
+    cross_functional_detail = None
+    if audience_label == "Cross-Functional":
+        if routing_candidates_display:
+            cross_functional_detail = " + ".join(routing_candidates_display)
+        else:
+            cross_functional_detail = "Mixed stakeholders (auto-routed)"
 
     attempt_views = []
     final_summary = None
@@ -576,6 +605,7 @@ def job_detail(request: Request, job_id: int) -> HTMLResponse:
         fail_reasons = evaluator_data.get("fail_reasons", [])
         attempt_views.append(
             {
+                "attempt_id": attempt.id,
                 "attempt_no": attempt.attempt_no,
                 "passed": attempt.passed,
                 "summary_preview": (attempt.generated_one_line_summary or "")[:200],
@@ -600,6 +630,10 @@ def job_detail(request: Request, job_id: int) -> HTMLResponse:
             "request": request,
             "job": job,
             "audience_label": audience_label,
+            "routing_candidates": routing_candidates_display,
+            "routing_reasons": routing_reasons,
+            "routing_confidence_pct": routing_confidence_pct,
+            "cross_functional_detail": cross_functional_detail,
             "job_ref": f"JD-{job.id:06d}",
             "document": doc,
             "attempts": attempt_views,
@@ -656,6 +690,23 @@ def document_detail(request: Request, doc_id: int) -> HTMLResponse:
     audience_label = None
     if job:
         audience_label = _audience_display(job.audience or job.selected_audience or "auto")
+    routing_candidates_display = []
+    routing_reasons = []
+    routing_confidence_pct = None
+    cross_functional_detail = None
+    if job:
+        routing_candidates = _safe_json_list(getattr(job, "routing_candidates_json", "[]"))
+        routing_candidates_display = [
+            _audience_display(aud) for aud in routing_candidates if isinstance(aud, str)
+        ]
+        routing_reasons = _safe_json_list(getattr(job, "routing_reasons_json", "[]"))
+        if getattr(job, "routing_confidence", None) is not None:
+            routing_confidence_pct = int(round(float(job.routing_confidence) * 100))
+        if audience_label == "Cross-Functional":
+            if routing_candidates_display:
+                cross_functional_detail = " + ".join(routing_candidates_display)
+            else:
+                cross_functional_detail = "Mixed stakeholders (auto-routed)"
 
     return templates.TemplateResponse(
         "document_detail.html",
@@ -664,9 +715,42 @@ def document_detail(request: Request, doc_id: int) -> HTMLResponse:
             "document": doc,
             "job": job,
             "audience_label": audience_label,
+            "routing_candidates": routing_candidates_display,
+            "routing_reasons": routing_reasons,
+            "routing_confidence_pct": routing_confidence_pct,
+            "cross_functional_detail": cross_functional_detail,
             "final_summary": final_summary,
             "tags": tags,
             "clues": clues,
+        },
+    )
+
+
+@app.get("/web/attempts/{attempt_id}", response_class=HTMLResponse)
+def attempt_detail(request: Request, attempt_id: int) -> HTMLResponse:
+    with get_session() as session:
+        attempt = session.get(JobAttempt, attempt_id)
+        if not attempt:
+            raise HTTPException(status_code=404, detail="Attempt not found.")
+        job = session.get(Job, attempt.job_id)
+        document = session.get(Document, job.document_id) if job else None
+
+    return templates.TemplateResponse(
+        "attempt_detail.html",
+        {
+            "request": request,
+            "attempt": attempt,
+            "job": job,
+            "document": document,
+            "routing_reasons": _safe_json_list(
+                getattr(job, "routing_reasons_json", "[]")
+            )
+            if job
+            else [],
+            "generated_tags": _safe_json_list(attempt.generated_tags_json),
+            "generated_clues": _safe_json_list(attempt.generated_clues_json),
+            "generated_bullets": _safe_json_list(attempt.generated_bullets_json),
+            "evaluator_data": _safe_json(attempt.evaluator_json),
         },
     )
 
