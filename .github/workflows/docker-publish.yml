@@ -27,10 +27,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare image name
+        id: prep
         run: |
           IMAGE_NAME="ghcr.io/${GITHUB_REPOSITORY}"
           IMAGE_NAME_LOWER=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
-          echo "IMAGE_NAME=$IMAGE_NAME_LOWER" >> "$GITHUB_ENV"
+          echo "image_name=$IMAGE_NAME_LOWER" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -38,7 +39,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ steps.prep.outputs.image_name }}:latest
+            ${{ steps.prep.outputs.image_name }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

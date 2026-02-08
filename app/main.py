@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
+import ipaddress
+import logging
 from pathlib import Path
+import socket
+import time
 from typing import Optional
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -23,7 +29,7 @@ TEMPLATES_DIR = APP_DIR.parent / "templates"
 STATIC_DIR = APP_DIR.parent / "static"
 
 SAMPLE_TEXT = (
-    "Asort Design is developing a modular analysis workflow for biomedical content. "
+    "Assort Design is developing a modular analysis workflow for biomedical content. "
     "The workflow routes content to audience-specific specialists who generate a one-line "
     "summary, key clues, decision bullets, and a mind map, followed by evaluation and revision "
     "to meet constraints."
@@ -31,6 +37,14 @@ SAMPLE_TEXT = (
 
 AUDIENCES = ["auto", "commercial", "medical_affairs", "r_and_d", "cross_functional"]
 MAX_DOC_CHARS = 20000
+MAX_URL_CHARS = 2048
+MAX_SEARCH_CHARS = 200
+MAX_URL_REDIRECTS = 3
+RATE_LIMIT_WINDOW_SEC = 60
+RATE_LIMIT_MAX = 20
+
+logger = logging.getLogger(__name__)
+_RATE_LIMIT_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
 
 def _audience_display(audience: str) -> str:
     if not audience or audience == "auto":
@@ -143,7 +157,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Asort Design", lifespan=lifespan)
+app = FastAPI(title="Assort Design", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -167,180 +181,78 @@ def home(request: Request, audience: Optional[str] = None) -> HTMLResponse:
     )
 
 
-@app.get("/web/insights", response_class=HTMLResponse)
-def insights(request: Request, page: int = 1) -> HTMLResponse:
-    page = _normalize_page(page)
-    limit = 10
-    offset = (page - 1) * limit
-    insights_items = []
-    with get_session() as session:
-        attempts = session.exec(
-            select(JobAttempt)
-            .where(JobAttempt.passed == True)  # noqa: E712
-            .order_by(JobAttempt.created_at.desc())
-            .offset(offset)
-            .limit(limit + 1)
-        ).all()
+def _check_rate_limit(request: Request) -> None:
+    client = request.client
+    if not client or not client.host:
+        return
+    key = client.host
+    now = time.monotonic()
+    bucket = _RATE_LIMIT_BUCKETS[key]
+    while bucket and now - bucket[0] > RATE_LIMIT_WINDOW_SEC:
+        bucket.popleft()
+    if len(bucket) >= RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=429, detail="Too many requests. Please wait and try again."
+        )
+    bucket.append(now)
 
-        has_next = len(attempts) > limit
-        attempts = attempts[:limit]
 
-        for attempt in attempts:
-            bullets = _safe_json_list(attempt.generated_bullets_json)
-            insights_items.append(
-                {
-                    "job_id": attempt.job_id,
-                    "audience": _audience_display(attempt.audience),
-                    "summary": attempt.generated_one_line_summary,
-                    "bullets": bullets[:3],
-                    "created_at": attempt.created_at,
-                }
-            )
-
-    return templates.TemplateResponse(
-        "insights.html",
-        {
-            "request": request,
-            "items": insights_items,
-            "page": page,
-            "has_prev": page > 1,
-            "has_next": has_next,
-        },
+def _is_private_ip(address: ipaddress._BaseAddress) -> bool:
+    return (
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_multicast
+        or address.is_reserved
+        or address.is_unspecified
     )
 
 
-@app.get("/web/routes", response_class=HTMLResponse)
-def routes_dashboard(request: Request) -> HTMLResponse:
-    audience_display = {aud: _audience_display(aud) for aud in AUDIENCES}
-    totals = {aud: 0 for aud in AUDIENCES}
-    recent = []
-
-    with get_session() as session:
-        jobs = session.exec(select(Job)).all()
-        for job in jobs:
-            audience_code = job.audience or job.selected_audience or "auto"
-            totals[audience_code] = totals.get(audience_code, 0) + 1
-
-        recent_jobs = session.exec(
-            select(Job).order_by(Job.created_at.desc()).limit(8)
-        ).all()
-        for job in recent_jobs:
-            recent.append(
-                {
-                    "job_id": job.id,
-                    "audience": audience_display.get(
-                        job.audience or job.selected_audience or "auto", "Auto"
-                    ),
-                    "status": job.status,
-                    "created_at": job.created_at,
-                }
-            )
-
-    return templates.TemplateResponse(
-        "routes.html",
-        {
-            "request": request,
-            "audience_display": audience_display,
-            "totals": totals,
-            "recent": recent,
-        },
-    )
+def _resolve_host(hostname: str) -> list[ipaddress._BaseAddress]:
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        return []
+    addresses: list[ipaddress._BaseAddress] = []
+    for info in infos:
+        addr = info[4][0]
+        try:
+            addresses.append(ipaddress.ip_address(addr))
+        except ValueError:
+            continue
+    return addresses
 
 
-@app.get("/web/library", response_class=HTMLResponse)
-def library(request: Request, page: int = 1, q: Optional[str] = None) -> HTMLResponse:
-    page = _normalize_page(page)
-    limit = 10
-    offset = (page - 1) * limit
-    search = (q or "").strip()
-    library_items = []
-    with get_session() as session:
-        if search:
-            doc_ids = set(
-                session.exec(
-                    select(Document.id).where(Document.content.contains(search))
-                ).all()
-            )
-            doc_ids.update(
-                session.exec(
-                    select(Document.id)
-                    .join(DocumentTag, DocumentTag.document_id == Document.id)
-                    .join(Tag, Tag.id == DocumentTag.tag_id)
-                    .where(Tag.name.contains(search))
-                ).all()
-            )
-            doc_ids.update(
-                session.exec(
-                    select(Document.id)
-                    .join(DocumentClue, DocumentClue.document_id == Document.id)
-                    .where(DocumentClue.clue_text.contains(search))
-                ).all()
-            )
-            if doc_ids:
-                docs = session.exec(
-                    select(Document)
-                    .where(Document.id.in_(doc_ids))
-                    .order_by(Document.created_at.desc())
-                    .offset(offset)
-                    .limit(limit + 1)
-                ).all()
-            else:
-                docs = []
-        else:
-            docs = session.exec(
-                select(Document)
-                .order_by(Document.created_at.desc())
-                .offset(offset)
-                .limit(limit + 1)
-            ).all()
+def _is_safe_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return False
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+    if hostname == "localhost" or hostname.endswith(".local"):
+        return False
+    addresses = _resolve_host(hostname)
+    if not addresses:
+        return False
+    if any(_is_private_ip(address) for address in addresses):
+        return False
+    return True
 
-        has_next = len(docs) > limit
-        docs = docs[:limit]
 
-        for doc in docs:
-            job = session.exec(
-                select(Job)
-                .where(Job.document_id == doc.id)
-                .order_by(Job.created_at.desc())
-            ).first()
+@app.get("/web/insights", response_class=RedirectResponse)
+def insights() -> RedirectResponse:
+    return RedirectResponse(url="/web/documents", status_code=302)
 
-            tags = session.exec(
-                select(Tag)
-                .join(DocumentTag, Tag.id == DocumentTag.tag_id)
-                .where(DocumentTag.document_id == doc.id)
-            ).all()
 
-            clues = session.exec(
-                select(DocumentClue).where(DocumentClue.document_id == doc.id)
-            ).all()
+@app.get("/web/routes", response_class=RedirectResponse)
+def routes_dashboard() -> RedirectResponse:
+    return RedirectResponse(url="/web/documents", status_code=302)
 
-            library_items.append(
-                {
-                    "document_id": doc.id,
-                    "job_id": job.id if job else None,
-                    "audience": _audience_display(
-                        job.audience or job.selected_audience or "auto"
-                    )
-                    if job
-                    else "Auto",
-                    "status": job.status if job else "pending",
-                    "snippet": (doc.content or "")[:200],
-                    "tags": [tag.name for tag in tags],
-                    "clues": [clue.clue_text for clue in clues],
-                }
-            )
 
-    return templates.TemplateResponse(
-        "library.html",
-        {
-            "request": request,
-            "items": library_items,
-            "page": page,
-            "has_prev": page > 1,
-            "has_next": has_next,
-            "query": search,
-        },
-    )
+@app.get("/web/library", response_class=RedirectResponse)
+def library() -> RedirectResponse:
+    return RedirectResponse(url="/web/documents", status_code=302)
 
 
 @app.get("/web/watchlist", response_class=HTMLResponse)
@@ -420,11 +332,22 @@ def about(request: Request) -> HTMLResponse:
 
 
 @app.get("/web/documents", response_class=HTMLResponse)
-def documents_index(request: Request, audience: Optional[str] = None) -> HTMLResponse:
+def documents_index(
+    request: Request,
+    audience: Optional[str] = None,
+    q: Optional[str] = None,
+    page: int = 1,
+) -> HTMLResponse:
+    page = _normalize_page(page)
+    limit = 10
+    search = (q or "").strip()
+    if len(search) > MAX_SEARCH_CHARS:
+        search = search[:MAX_SEARCH_CHARS]
+
     audience_display = {aud: _audience_display(aud) for aud in AUDIENCES}
     selected_audience = audience if audience in AUDIENCES else "all"
     route_counts = {aud: 0 for aud in AUDIENCES}
-    documents = []
+    documents: list[dict[str, object]] = []
 
     with get_session() as session:
         all_jobs = session.exec(select(Job)).all()
@@ -432,39 +355,89 @@ def documents_index(request: Request, audience: Optional[str] = None) -> HTMLRes
             audience_code = job.audience or job.selected_audience or "auto"
             route_counts[audience_code] = route_counts.get(audience_code, 0) + 1
 
-        recent_docs = session.exec(
-            select(Document).order_by(Document.created_at.desc()).limit(50)
-        ).all()
+        if search:
+            doc_ids = set(
+                session.exec(
+                    select(Document.id).where(Document.content.contains(search))
+                ).all()
+            )
+            doc_ids.update(
+                session.exec(
+                    select(Document.id)
+                    .join(DocumentTag, DocumentTag.document_id == Document.id)
+                    .join(Tag, Tag.id == DocumentTag.tag_id)
+                    .where(Tag.name.contains(search))
+                ).all()
+            )
+            doc_ids.update(
+                session.exec(
+                    select(Document.id)
+                    .join(DocumentClue, DocumentClue.document_id == Document.id)
+                    .where(DocumentClue.clue_text.contains(search))
+                ).all()
+            )
+            if doc_ids:
+                docs = session.exec(
+                    select(Document)
+                    .where(Document.id.in_(doc_ids))
+                    .order_by(Document.created_at.desc())
+                ).all()
+            else:
+                docs = []
+        else:
+            docs = session.exec(
+                select(Document).order_by(Document.created_at.desc())
+            ).all()
 
-        for doc in recent_docs:
-            job = session.exec(
+        doc_ids = [doc.id for doc in docs]
+        latest_jobs: dict[int, Job] = {}
+        latest_attempts: dict[int, JobAttempt] = {}
+
+        if doc_ids:
+            jobs = session.exec(
                 select(Job)
-                .where(Job.document_id == doc.id)
+                .where(Job.document_id.in_(doc_ids))
                 .order_by(Job.created_at.desc())
-            ).first()
-            if not job:
-                continue
+            ).all()
+            for job in jobs:
+                if job.document_id not in latest_jobs:
+                    latest_jobs[job.document_id] = job
 
-            audience_code = job.audience or job.selected_audience or "auto"
+            job_ids = [job.id for job in latest_jobs.values()]
+            if job_ids:
+                attempts = session.exec(
+                    select(JobAttempt)
+                    .where(JobAttempt.job_id.in_(job_ids))
+                    .order_by(JobAttempt.attempt_no.desc())
+                ).all()
+                for attempt in attempts:
+                    if attempt.job_id not in latest_attempts:
+                        latest_attempts[attempt.job_id] = attempt
+
+        filtered_docs = []
+        for doc in docs:
+            job = latest_jobs.get(doc.id)
+            audience_code = (
+                job.audience or job.selected_audience or "auto" if job else "auto"
+            )
             if selected_audience != "all" and audience_code != selected_audience:
                 continue
-
-            attempt = session.exec(
-                select(JobAttempt)
-                .where(JobAttempt.job_id == job.id)
-                .order_by(JobAttempt.attempt_no.desc())
-            ).first()
-
-            documents.append(
+            attempt = latest_attempts.get(job.id) if job else None
+            filtered_docs.append(
                 {
                     "document_id": doc.id,
-                    "job_id": job.id,
+                    "job_id": job.id if job else None,
                     "audience": audience_code,
-                    "status": job.status,
+                    "status": job.status if job else "pending",
                     "snippet": (doc.content or "")[:200],
                     "summary": attempt.generated_one_line_summary if attempt else "",
                 }
             )
+
+        start = (page - 1) * limit
+        end = start + limit
+        documents = filtered_docs[start:end]
+        has_next = end < len(filtered_docs)
 
     return templates.TemplateResponse(
         "documents.html",
@@ -475,6 +448,10 @@ def documents_index(request: Request, audience: Optional[str] = None) -> HTMLRes
             "selected_audience": selected_audience,
             "route_counts": route_counts,
             "documents": documents,
+            "page": page,
+            "has_prev": page > 1,
+            "has_next": has_next,
+            "query": search,
         },
     )
 
@@ -487,22 +464,38 @@ def create_document(
     use_sample: Optional[str] = Form(None),
     audience: str = Form("auto"),
 ) -> HTMLResponse:
+    _check_rate_limit(request)
     content = ""
     source_type = ""
+    input_text = (input_text or "").strip()
+    input_url = (input_url or "").strip()
+
+    if input_url and len(input_url) > MAX_URL_CHARS:
+        context = _build_home_context(audience)
+        return templates.TemplateResponse(
+            "home.html",
+            {
+                "request": request,
+                **context,
+                "sample_text": SAMPLE_TEXT,
+                "error": "URL is too long.",
+            },
+            status_code=400,
+        )
 
     if use_sample:
         content = SAMPLE_TEXT
         source_type = "sample"
-    elif input_url.strip():
-        content = fetch_url_text(input_url.strip())
+    elif input_url:
+        content = fetch_url_text(input_url)
         source_type = "url"
-    elif input_text.strip():
-        content = input_text.strip()
+    elif input_text:
+        content = input_text
         source_type = "text"
 
     if not content:
         error_message = "Provide text, URL, or choose sample content."
-        if input_url.strip():
+        if input_url:
             error_message = "URL fetch failed (blocked or empty content)."
         context = _build_home_context(audience)
         return templates.TemplateResponse(
@@ -535,20 +528,19 @@ def create_document(
     )
 
     with get_session() as session:
-        session.add(doc)
-        session.commit()
-        session.refresh(doc)
-
-        job.document_id = doc.id
-        session.add(job)
-        session.commit()
+        with session.begin():
+            session.add(doc)
+            session.flush()
+            job.document_id = doc.id
+            session.add(job)
         session.refresh(job)
 
     return RedirectResponse(url=f"/web/jobs/{job.id}", status_code=303)
 
 
 @app.post("/web/jobs/{job_id}/run", response_class=HTMLResponse)
-def run_job(job_id: int) -> HTMLResponse:
+def run_job(request: Request, job_id: int) -> HTMLResponse:
+    _check_rate_limit(request)
     with get_session() as session:
         job = session.get(Job, job_id)
         if not job:
@@ -756,29 +748,47 @@ def attempt_detail(request: Request, attempt_id: int) -> HTMLResponse:
 
 
 def fetch_url_text(url: str) -> str:
-    try:
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0 Safari/537.36"
-            )
-        }
-        response = httpx.get(
-            url,
-            timeout=20.0,
-            follow_redirects=True,
-            headers=headers,
-        )
-        response.raise_for_status()
-    except Exception:
+    url = (url or "").strip()
+    if not url or len(url) > MAX_URL_CHARS:
         return ""
 
-    soup = BeautifulSoup(response.text, "lxml")
-    for tag in soup(["script", "style", "noscript"]):
-        tag.decompose()
-    text = " ".join(soup.stripped_strings)
-    return text[:MAX_DOC_CHARS]
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0 Safari/537.36"
+        )
+    }
+
+    for _ in range(MAX_URL_REDIRECTS + 1):
+        if not _is_safe_url(url):
+            logger.warning("Blocked unsafe URL fetch: %s", url[:200])
+            return ""
+        try:
+            response = httpx.get(
+                url,
+                timeout=20.0,
+                follow_redirects=False,
+                headers=headers,
+            )
+            if response.is_redirect:
+                location = response.headers.get("location")
+                if not location:
+                    return ""
+                url = urljoin(str(response.url), location)
+                continue
+            response.raise_for_status()
+        except Exception:
+            logger.exception("URL fetch failed.")
+            return ""
+
+        soup = BeautifulSoup(response.text, "lxml")
+        for tag in soup(["script", "style", "noscript"]):
+            tag.decompose()
+        text = " ".join(soup.stripped_strings)
+        return text[:MAX_DOC_CHARS]
+
+    return ""
 
 
 def _safe_json(payload: str) -> dict:

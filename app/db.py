@@ -16,6 +16,7 @@ def init_db() -> None:
     DB_DIR.mkdir(parents=True, exist_ok=True)
     SQLModel.metadata.create_all(engine)
     _ensure_job_columns()
+    _ensure_indexes()
 
 
 def get_session() -> Session:
@@ -33,3 +34,34 @@ def _ensure_job_columns() -> None:
             conn.execute(text("ALTER TABLE job ADD COLUMN routing_candidates_json TEXT"))
         if "routing_reasons_json" not in columns:
             conn.execute(text("ALTER TABLE job ADD COLUMN routing_reasons_json TEXT"))
+
+
+def _ensure_indexes() -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_job_document_id ON job (document_id)")
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_jobattempt_job_id "
+                "ON jobattempt (job_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_documentclue_document_id "
+                "ON documentclue (document_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_documenttag_document_id "
+                "ON documenttag (document_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_documenttag_tag_id "
+                "ON documenttag (tag_id)"
+            )
+        )

@@ -1,7 +1,7 @@
-# Business Logic - Asort Design
+# Business Logic - Assort Design
 
 ## Scope
-This document defines the business logic for the Asort Design app using FastAPI, Jinja2, SQLite, SQLModel, LangGraph, and OpenAI Responses API with a mock fallback.
+This document defines the business logic for the Assort Design app using FastAPI, Jinja2, SQLite, SQLModel, LangGraph, and OpenAI Responses API with a mock fallback.
 
 ## Core Entities
 - Document: user-provided content from pasted text, URL extraction, or sample text.

@@ -1,4 +1,4 @@
-﻿# File Guide - Asort Design
+# File Guide - Assort Design
 
 This document summarizes the purpose of each core file and how it fits into the
 overall FastAPI + LangGraph application.

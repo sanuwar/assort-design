@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Document {{ document.id }} - Asort Design{% endblock %}
+{% block title %}Document {{ document.id }} - Assort Design{% endblock %}
 
 {% block content %}
   <div class="card">
@@ -89,7 +89,6 @@
     <h3>Mind Map</h3>
     {% if final_summary and final_summary.mind_map %}
       <pre class="mermaid">{{ final_summary.mind_map }}</pre>
-      <p class="muted">If the diagram doesn't render, ensure Mermaid is available.</p>
       <p class="muted">If needed, use the in-page "View source" button on the job detail page to see the raw mind map.</p>
     {% else %}
       <p class="muted">No mind map yet.</p>

@@ -1,4 +1,4 @@
-# Acceptance Criteria - Asort Design
+# Acceptance Criteria - Assort Design
 
 ## General
 - The app runs with FastAPI, Jinja2, SQLite, SQLModel, and LangGraph.

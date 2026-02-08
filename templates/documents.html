@@ -1,21 +1,45 @@
 {% extends "base.html" %}
 
-{% block title %}Documents - Asort Design{% endblock %}
+{% block title %}Records - Assort Design{% endblock %}
 
 {% block content %}
   <div class="card">
-    <h2>Documents</h2>
-    <p class="muted">Browse recent documents and filter by route.</p>
-    <div class="actions">
-      <a class="button" href="/web">New Document</a>
-    </div>
+    <h2>Records</h2>
+    <p class="muted">Browse every document routed through Assort Design.</p>
+    <form method="get" action="/web/documents">
+      <div class="search-bar">
+        <input
+          type="text"
+          name="q"
+          placeholder="Search content, tags, or clues"
+          value="{{ query }}"
+        />
+        <select name="audience">
+          <option value="all" {% if selected_audience == "all" %}selected{% endif %}>
+            All routes
+          </option>
+          {% for aud in audiences %}
+            <option
+              value="{{ aud }}"
+              {% if selected_audience == aud %}selected{% endif %}
+            >
+              {{ audience_display.get(aud, aud) }}
+            </option>
+          {% endfor %}
+        </select>
+        <button class="button" type="submit">Search</button>
+        {% if query or selected_audience != "all" %}
+          <a class="button" href="/web/documents">Clear</a>
+        {% endif %}
+      </div>
+    </form>
   </div>
 
   <div class="card">
     <h3>Route Filters</h3>
     <ul>
       <li>
-        <a href="/web/documents">
+        <a href="/web/documents{% if query %}?q={{ query | urlencode }}{% endif %}">
           <strong>All</strong>
           {% if selected_audience == "all" %}
             <span class="muted">(selected)</span>
@@ -24,7 +48,7 @@
       </li>
       {% for aud in audiences %}
         <li>
-          <a href="/web/documents?audience={{ aud }}">
+          <a href="/web/documents?audience={{ aud }}{% if query %}&q={{ query | urlencode }}{% endif %}">
             <strong
               class="{% if audience_display.get(aud, aud) == 'Cross-Functional' %}tooltip{% endif %}"
               {% if audience_display.get(aud, aud) == 'Cross-Functional' %}
@@ -43,41 +67,50 @@
     </ul>
   </div>
 
-  <div class="card">
-    <h3>Recent Documents</h3>
-    {% if documents %}
-      <ul>
-        {% for doc in documents %}
-          <li>
-            <a class="link-card" href="/web/jobs/{{ doc.job_id }}">
-              <div>
-                <strong>Route:</strong>
-                <span
-                  class="{% if audience_display.get(doc.audience, doc.audience) == 'Cross-Functional' %}tooltip{% endif %}"
-                  {% if audience_display.get(doc.audience, doc.audience) == 'Cross-Functional' %}
-                    data-tip="Mixed stakeholders (see request for details)"
-                  {% endif %}
-                >
-                  {{ audience_display.get(doc.audience, doc.audience) }}
-                </span>
-                • <span class="status-chip status-{{ doc.status }}">{{ doc.status }}</span>
-              </div>
-              <div class="muted">{{ doc.snippet }}</div>
-              {% if doc.summary %}
-                <div><strong>One-line summary:</strong> {{ doc.summary }}</div>
-              {% else %}
-                <div class="muted">No summary yet.</div>
-              {% endif %}
-            </a>
-            <div class="actions">
-              <a class="button" href="/web/jobs/{{ doc.job_id }}">Analyze Now</a>
-              <a class="button" href="/web/documents/{{ doc.document_id }}">View Source</a>
-            </div>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="muted">No documents found for this filter.</p>
-    {% endif %}
-  </div>
+  {% if documents %}
+    {% for doc in documents %}
+      <div class="card">
+        <div class="muted">
+          <strong>Route:</strong>
+          <span
+            class="{% if audience_display.get(doc.audience, doc.audience) == 'Cross-Functional' %}tooltip{% endif %}"
+            {% if audience_display.get(doc.audience, doc.audience) == 'Cross-Functional' %}
+              data-tip="Mixed stakeholders (see request for details)"
+            {% endif %}
+          >
+            {{ audience_display.get(doc.audience, doc.audience) }}
+          </span>
+          • <span class="status-chip status-{{ doc.status }}">{{ doc.status }}</span>
+        </div>
+        <p>{{ doc.snippet }}</p>
+        {% if doc.summary %}
+          <p><strong>One-line summary:</strong> {{ doc.summary }}</p>
+        {% else %}
+          <p class="muted">No summary yet.</p>
+        {% endif %}
+        <div class="actions">
+          {% if doc.job_id %}
+            <a class="button" href="/web/jobs/{{ doc.job_id }}">View Request</a>
+          {% endif %}
+          <a class="button" href="/web/documents/{{ doc.document_id }}">View Source</a>
+        </div>
+      </div>
+    {% endfor %}
+
+    <div class="card">
+      <div class="pagination">
+        {% if has_prev %}
+        <a class="button" href="/web/documents?page={{ page - 1 }}{% if selected_audience != "all" %}&audience={{ selected_audience }}{% endif %}{% if query %}&q={{ query | urlencode }}{% endif %}">Previous</a>
+        {% endif %}
+        <span class="muted">Page {{ page }}</span>
+        {% if has_next %}
+        <a class="button" href="/web/documents?page={{ page + 1 }}{% if selected_audience != "all" %}&audience={{ selected_audience }}{% endif %}{% if query %}&q={{ query | urlencode }}{% endif %}">Next</a>
+        {% endif %}
+      </div>
+    </div>
+  {% else %}
+    <div class="card">
+      <p class="muted">No records found for this filter.</p>
+    </div>
+  {% endif %}
 {% endblock %}

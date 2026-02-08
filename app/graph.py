@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from typing import Any, Dict, List
 
 from langgraph.graph import END, StateGraph
+from sqlalchemy import text
 from sqlmodel import Session, delete, select
 
 from app.config import (
@@ -14,6 +17,16 @@ from app.config import (
 )
 from app.llm import evaluate_content, generate_content, route_audience
 from app.models import Document, DocumentClue, DocumentTag, Job, JobAttempt, Tag
+
+def _get_pipeline_timeout() -> int:
+    value = os.getenv("PIPELINE_TIMEOUT_SEC", "120")
+    try:
+        return int(value)
+    except ValueError:
+        return 120
+
+
+PIPELINE_TIMEOUT_SEC = _get_pipeline_timeout()
 
 
 def _build_graph(
@@ -63,7 +76,13 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
     generation_prompt = get_generation_config()["prompt"]
     evaluator_prompt = get_evaluation_config()["evaluator_prompt"]
 
+    def _ensure_not_timed_out(state: Dict[str, Any]) -> None:
+        deadline = state.get("deadline")
+        if deadline and time.monotonic() > deadline:
+            raise TimeoutError("Job pipeline timed out.")
+
     def route_audience_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        _ensure_not_timed_out(state)
         new_state = dict(state)
         if job.selected_audience != "auto":
             audience = job.selected_audience
@@ -120,6 +139,7 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
         return new_state
 
     def specialist_generate_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        _ensure_not_timed_out(state)
         generated = generate_content(
             system_prompt=state["system_prompt"],
             generation_prompt=generation_prompt,
@@ -133,6 +153,7 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
         return new_state
 
     def evaluate_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        _ensure_not_timed_out(state)
         generated = state.get("generated", {})
         one_line_summary = str(generated.get("one_line_summary", "")).strip()
         tags = _normalize_list(generated.get("tags"))
@@ -168,6 +189,7 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
         return new_state
 
     def persist_attempt_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        _ensure_not_timed_out(state)
         attempt_no = state["attempt_no"]
         attempt = JobAttempt(
             job_id=job.id,
@@ -187,11 +209,13 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
         return dict(state)
 
     def revise_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        _ensure_not_timed_out(state)
         new_state = dict(state)
         new_state["attempt_no"] = state["attempt_no"] + 1
         return new_state
 
     def persist_results_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        _ensure_not_timed_out(state)
         job.attempt_count = state["attempt_no"]
         job.status = "completed" if state["passed"] else "failed"
         session.add(job)
@@ -203,6 +227,7 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
         return dict(state)
 
     def next_step(state: Dict[str, Any]) -> str:
+        _ensure_not_timed_out(state)
         if state.get("passed"):
             return "persist_results"
         if state["attempt_no"] <= state["max_retries"]:
@@ -224,6 +249,7 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
                 "attempt_no": 1,
                 "max_retries": job.max_retries,
                 "fix_instructions": [],
+                "deadline": time.monotonic() + PIPELINE_TIMEOUT_SEC,
             }
         )
     except Exception as exc:
@@ -320,7 +346,7 @@ if __name__ == "__main__":
     import sys
 
     parser = argparse.ArgumentParser(
-        description="Render the Asort Design LangGraph pipeline."
+        description="Render the Assort Design LangGraph pipeline."
     )
     parser.add_argument(
         "--mermaid",
@@ -361,19 +387,37 @@ if __name__ == "__main__":
 def _replace_tags(session: Session, document_id: int, tags: List[str]) -> None:
     session.exec(delete(DocumentTag).where(DocumentTag.document_id == document_id))
 
+    names: list[str] = []
+    seen: set[str] = set()
     for tag in tags:
         name = tag.strip().lower()
-        if not name:
+        if not name or name in seen:
             continue
+        seen.add(name)
+        names.append(name)
 
-        existing = session.exec(select(Tag).where(Tag.name == name)).first()
-        if not existing:
-            existing = Tag(name=name)
-            session.add(existing)
-            session.commit()
-            session.refresh(existing)
+    if not names:
+        return
 
-        session.add(DocumentTag(document_id=document_id, tag_id=existing.id))
+    existing_tags = session.exec(select(Tag).where(Tag.name.in_(names))).all()
+    tags_by_name = {tag.name: tag for tag in existing_tags}
+    missing = [name for name in names if name not in tags_by_name]
+
+    for name in missing:
+        session.exec(
+            text("INSERT OR IGNORE INTO tag (name) VALUES (:name)").bindparams(
+                name=name
+            )
+        )
+
+    if missing:
+        existing_tags = session.exec(select(Tag).where(Tag.name.in_(names))).all()
+        tags_by_name = {tag.name: tag for tag in existing_tags}
+
+    for name in names:
+        tag_obj = tags_by_name.get(name)
+        if tag_obj:
+            session.add(DocumentTag(document_id=document_id, tag_id=tag_obj.id))
 
 
 def _replace_clues(session: Session, document_id: int, clues: List[str]) -> None:

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
 
 DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+DEFAULT_TIMEOUT_SEC = 30.0
+
+logger = logging.getLogger(__name__)
 
 
 def has_api_key() -> bool:
@@ -24,14 +28,21 @@ def is_langsmith_tracing_enabled() -> bool:
 def get_client() -> Optional[OpenAI]:
     if not has_api_key():
         return None
-    client = OpenAI()
+    timeout_value = os.getenv("OPENAI_TIMEOUT_SEC", "").strip()
+    timeout = DEFAULT_TIMEOUT_SEC
+    if timeout_value:
+        try:
+            timeout = float(timeout_value)
+        except ValueError:
+            timeout = DEFAULT_TIMEOUT_SEC
+    client = OpenAI(timeout=timeout)
     if is_langsmith_tracing_enabled():
         try:
             from langsmith.wrappers import wrap_openai
 
             client = wrap_openai(client)
         except Exception:
-            pass
+            logger.debug("LangSmith wrapping failed; continuing without tracing.", exc_info=True)
     return client
 
 

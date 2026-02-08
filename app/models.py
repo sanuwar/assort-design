@@ -5,8 +5,10 @@ from sqlmodel import Field, Relationship, SQLModel
 
 
 class DocumentTag(SQLModel, table=True):
-    document_id: int = Field(foreign_key="document.id", primary_key=True)
-    tag_id: int = Field(foreign_key="tag.id", primary_key=True)
+    document_id: int = Field(
+        foreign_key="document.id", primary_key=True, index=True
+    )
+    tag_id: int = Field(foreign_key="tag.id", primary_key=True, index=True)
 
 
 class Document(SQLModel, table=True):
@@ -22,7 +24,7 @@ class Document(SQLModel, table=True):
 
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id")
+    document_id: int = Field(foreign_key="document.id", index=True)
     selected_audience: str
     audience: Optional[str] = None
     routing_confidence: Optional[float] = None
@@ -40,7 +42,7 @@ class Job(SQLModel, table=True):
 
 class JobAttempt(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    job_id: int = Field(foreign_key="job.id")
+    job_id: int = Field(foreign_key="job.id", index=True)
     attempt_no: int
     audience: str
     agent_used: str
@@ -65,7 +67,7 @@ class Tag(SQLModel, table=True):
 
 class DocumentClue(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id")
+    document_id: int = Field(foreign_key="document.id", index=True)
     clue_text: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
