@@ -107,9 +107,8 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
                 candidates = [c for c in candidates if c in allowed]
             else:
                 candidates = []
-            candidates = _filter_candidates_by_keywords(document.content, candidates)
             if not candidates and audience in allowed:
-                candidates = _filter_candidates_by_keywords(document.content, [audience])
+                candidates = [audience]
             threshold = float(routing_config.get("low_confidence_threshold", 0.5))
             if confidence < threshold:
                 audience = "cross_functional"

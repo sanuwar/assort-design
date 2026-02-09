@@ -112,6 +112,8 @@ cd /
 ### Pull latest image and restart services (on VPS)
 
 ```bash
+cd /opt/assort-design && sed -i 's#ghcr.io/sanuwar/assort-design:[a-f0-9]\+#ghcr.io/sanuwar/assort-design:429836578b88ab82be59d7a185235ccb5264f47a#g' docker-compose.yml
+
 cd /opt/assort-design && docker compose pull && docker compose up -d
 ```
 
