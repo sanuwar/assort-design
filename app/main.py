@@ -338,7 +338,7 @@ def about(request: Request) -> HTMLResponse:
 
 @app.get("/web/visuals", response_class=HTMLResponse)
 def project_visuals() -> FileResponse:
-    visuals_path = APP_DIR.parent / "docs" / "project_visuals.html"
+    visuals_path = TEMPLATES_DIR / "project_visuals.html"
     return FileResponse(visuals_path, media_type="text/html")
 
 
