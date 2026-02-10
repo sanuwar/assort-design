@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Assort Design – Project Visuals</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      color: #1a1a2e;
+      background: #f4f6fb;
+    }
+
+    /* ── Top Tab Bar ─────────────────────────────────────── */
+    .tab-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 56px;
+      background: #0f3460;
+      display: flex;
+      align-items: stretch;
+      z-index: 200;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+
+    .tab-bar .brand {
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      color: #e94560;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      border-right: 1px solid #1e4080;
+      white-space: nowrap;
+    }
+
+    .tab-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 28px;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: #a0b4cc;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover { color: #fff; background: #16213e; }
+
+    .tab-btn.active {
+      color: #fff;
+      border-bottom-color: #e94560;
+      background: #16213e;
+    }
+
+    .tab-btn .tab-icon {
+      font-size: 16px;
+    }
+
+    .tab-btn .tab-badge {
+      background: #e94560;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+
+    /* ── Layout ──────────────────────────────────────────── */
+    .layout {
+      display: flex;
+      margin-top: 56px;
+      min-height: calc(100vh - 56px);
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    aside {
+      position: fixed;
+      top: 56px;
+      left: 0;
+      width: 220px;
+      height: calc(100vh - 56px);
+      background: #16213e;
+      color: #c9d6ea;
+      padding: 20px 0;
+      overflow-y: auto;
+      z-index: 100;
+    }
+
+    .aside-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+      color: #e94560;
+      padding: 0 18px 12px;
+      border-bottom: 1px solid #1e2d4a;
+      margin-bottom: 8px;
+    }
+
+    aside a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 18px;
+      color: #c9d6ea;
+      text-decoration: none;
+      font-size: 12.5px;
+      transition: background 0.15s;
+      border-left: 3px solid transparent;
+    }
+
+    aside a:hover     { background: #1e2d4a; color: #fff; }
+    aside a.active    { background: #1e2d4a; color: #fff; border-left-color: #e94560; }
+
+    aside a .num {
+      background: #0f3460;
+      color: #e94560;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 3px;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    /* ── Main Content ────────────────────────────────────── */
+    main {
+      margin-left: 220px;
+      padding: 40px 52px 80px;
+      flex: 1;
+      max-width: 1020px;
+    }
+
+    /* ── Tab Panels ──────────────────────────────────────── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Page Header ─────────────────────────────────────── */
+    .page-header {
+      margin-bottom: 40px;
+    }
+
+    .page-header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: #0f3460;
+    }
+
+    .page-header p {
+      margin-top: 6px;
+      color: #6b7280;
+      font-size: 13px;
+    }
+
+    /* ── Section Card ────────────────────────────────────── */
+    .section {
+      background: #fff;
+      border-radius: 10px;
+      border: 1px solid #dde2ee;
+      margin-bottom: 36px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      background: #0f3460;
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-header .num {
+      background: #e94560;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    .section-header h2 { font-size: 15px; font-weight: 600; }
+
+    .section-header .src {
+      margin-left: auto;
+      font-size: 11px;
+      color: #7a9ac0;
+      font-family: monospace;
+    }
+
+    .section-body { padding: 24px; }
+
+    .section-body h3 {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #9ca3af;
+      margin-bottom: 14px;
+    }
+
+    /* ── Diagram ─────────────────────────────────────────── */
+    .diagram-box {
+      background: #f8f9fc;
+      border: 1px solid #dde2ee;
+      border-radius: 8px;
+      padding: 20px 12px;
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+    }
+
+    /* ── Pre ─────────────────────────────────────────────── */
+    pre {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      border-radius: 8px;
+      padding: 18px 22px;
+      overflow-x: auto;
+    }
+
+    /* ── Table ───────────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead tr { background: #0f3460; color: #fff; }
+    th, td   { padding: 9px 14px; text-align: left; border: 1px solid #dde2ee; }
+    tbody tr:nth-child(even) { background: #f3f5fb; }
+    tbody tr:hover           { background: #e8edf8; }
+
+    /* ── Code ────────────────────────────────────────────── */
+    code {
+      font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+      background: #eef0f8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      color: #e94560;
+    }
+
+    /* ── HR / Caption ────────────────────────────────────── */
+    .divider { border: none; border-top: 1px solid #eaecf3; margin: 22px 0; }
+
+    .caption { font-size: 11.5px; color: #9ca3af; margin-top: 8px; }
+
+    /* ── Diagram zoom trigger ────────────────────────────── */
+    /* wrapper injected by JS — sits OUTSIDE overflow:auto */
+    .diagram-wrap {
+      position: relative;
+      margin-bottom: 8px;
+    }
+
+    .zoom-btn {
+      position: absolute;
+      top: 10px; right: 12px;
+      z-index: 20;
+      background: #0f3460;
+      color: #fff;
+      border: none;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 11px;
+      border-radius: 20px;
+      cursor: pointer;
+      opacity: 1;
+      transition: opacity 0.15s, background 0.15s;
+      white-space: nowrap;
+      pointer-events: auto;
+    }
+
+    .diagram-wrap:hover .zoom-btn { opacity: 1; }
+    .zoom-btn:hover { background: #e94560; }
+
+    /* ── Zoom Modal ───────────────────────────────────────── */
+    #zoom-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(10, 18, 36, 0.82);
+      backdrop-filter: blur(4px);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #zoom-modal.open { display: flex; }
+
+    #zoom-modal .zoom-toolbar {
+      position: fixed;
+      top: 16px; left: 50%; transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #0f3460;
+      border-radius: 30px;
+      padding: 6px 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+      z-index: 10001;
+    }
+
+    .zoom-toolbar .zt-label {
+      color: #a0b4cc;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 4px;
+      white-space: nowrap;
+    }
+
+    .zoom-toolbar button {
+      background: #16213e;
+      border: 1px solid #1e4080;
+      color: #fff;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+
+    .zoom-toolbar button:hover { background: #e94560; border-color: #e94560; }
+
+    .zoom-toolbar .zt-pct {
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      min-width: 44px;
+      text-align: center;
+    }
+
+    .zoom-toolbar .zt-close {
+      background: #e94560;
+      border-color: #e94560;
+      margin-left: 8px;
+      font-size: 14px;
+    }
+
+    .zoom-toolbar .zt-close:hover { background: #c73652; border-color: #c73652; }
+
+    #zoom-stage {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+    }
+
+    #zoom-stage.dragging { cursor: grabbing; }
+
+    #zoom-content {
+      transform-origin: center center;
+      transition: transform 0.15s ease;
+      user-select: none;
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px 40px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.4);
+      max-width: 90vw;
+    }
+
+    #zoom-content svg {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* ── Print ───────────────────────────────────────────── */
+    @media print {
+      .tab-bar      { display: none; }
+      aside         { display: none; }
+      main          { margin-left: 0; padding: 20px 28px; }
+      .tab-panel    { display: block !important; }
+      .section      { break-inside: avoid; page-break-before: auto; border: 1px solid #ccc; margin-bottom: 24px; }
+      .diagram-box  { break-inside: avoid; }
+      pre           { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════════
+       TOP TAB BAR
+  ═══════════════════════════════════════════════════════════ -->
+  <div class="tab-bar">
+    <div class="brand">&#9670; Assort Design</div>
+    <button class="tab-btn active" onclick="switchTab('visuals', this)">
+      <span class="tab-icon">&#128200;</span> Project Visuals
+      <span class="tab-badge">4</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('db', this)">
+      <span class="tab-icon">&#128451;</span> Database Schema
+      <span class="tab-badge">4</span>
+    </button>
+  </div>
+
+  <div class="layout">
+
+    <!-- ══════════════════════════════════════════════════════
+         SIDEBAR  (changes content per tab)
+    ═══════════════════════════════════════════════════════ -->
+    <aside id="sidebar">
+      <!-- filled by JS -->
+    </aside>
+
+    <!-- ══════════════════════════════════════════════════════
+         MAIN
+    ═══════════════════════════════════════════════════════ -->
+    <main>
+
+      <!-- ── TAB 1: Project Visuals ──────────────────────── -->
+      <div class="tab-panel active" id="panel-visuals">
+
+        <div class="page-header">
+          <h1>Project Visuals</h1>
+          <p>Pipeline, LLM, and configuration architecture diagrams</p>
+        </div>
+
+        <!-- 01 Pipeline Graph -->
+        <div class="section" id="v-graph">
+          <div class="section-header">
+            <span class="num">01</span>
+            <h2>LangGraph Pipeline</h2>
+            <span class="src">graph.md</span>
+          </div>
+          <div class="section-body">
+            <h3>Node flow</h3>
+            <div class="diagram-box">
+              <div class="mermaid">
+flowchart TD
+  route_audience[route_audience] --> specialist_generate[specialist_generate]
+  specialist_generate --> evaluate
+  evaluate --> persist_attempt
+  persist_attempt -->|revise| revise
+  persist_attempt -->|persist_results| persist_results
+  revise --> specialist_generate
+  persist_results --> END
+              </div>
+            </div>
+            <p class="caption">
+              <code>route_audience</code> → <code>specialist_generate</code> → <code>evaluate</code> → <code>persist_attempt</code>
+              — branches to <code>revise</code> (retry loop) or <code>persist_results</code> (done)
+            </p>
+          </div>
+        </div>
+
+        <!-- 02 LLM Flow -->
+        <div class="section" id="v-llm">
+          <div class="section-header">
+            <span class="num">02</span>
+            <h2>LLM Call Flow</h2>
+            <span class="src">llm_file_visual.md</span>
+          </div>
+          <div class="section-body">
+            <h3>Flow: Check mock → (mock result) OR (OpenAI call → extract text → parse JSON) → dict</h3>
+            <div class="diagram-box">
+              <div class="mermaid">
+flowchart TD
+  A[route_audience / generate_content / evaluate_content] --> B{is_mock_mode?}
+
+  B -- Yes --> M1["_mock_route / _mock_generate / _mock_evaluate"]
+  M1 --> R1[Return deterministic JSON dict]
+
+  B -- No --> C["_call_llm_json"]
+  C --> D[get_client]
+  D --> E{OPENAI_API_KEY set?}
+  E -- No --> X[RuntimeError: client not available]
+  E -- Yes --> F["OpenAI Responses API: responses.create"]
+  F --> G["_extract_text"]
+  G --> H["_parse_json"]
+  H --> R2[Return JSON dict]
+              </div>
+            </div>
+            <p class="caption">
+              Mock mode activates when <code>OPENAI_API_KEY</code> is absent.
+              Real mode calls the OpenAI Responses API and parses the JSON reply.
+            </p>
+          </div>
+        </div>
+
+        <!-- 03 Config Loader -->
+        <div class="section" id="v-config-flow">
+          <div class="section-header">
+            <span class="num">03</span>
+            <h2>Agent Profiles Loader</h2>
+            <span class="src">config_file_visual.md</span>
+          </div>
+          <div class="section-body">
+            <h3>Flow: Getter → load → validate → cache</h3>
+            <div class="diagram-box">
+              <div class="mermaid">
+flowchart TD
+  A["get_audience_profile(audience)"] --> B["load_profiles()"]
+  B --> C{_PROFILES is None?}
+
+  C -- No --> D[Return cached _PROFILES]
+  C -- Yes --> E["Build path: module_dir/agent_profiles.yaml"]
+  E --> F{File exists?}
+  F -- No --> G[FileNotFoundError]
+  F -- Yes --> H["yaml.safe_load()"]
+  H --> I{Top-level is dict?}
+  I -- No --> J[ValueError]
+  I -- Yes --> K["_validate_profiles(data)"]
+  K --> L["_PROFILES = data (cache)"]
+  L --> M[Return _PROFILES]
+
+  M --> N[Look up profiles.audiences]
+  N --> O{audience key exists?}
+  O -- No --> P[ValueError: show available keys]
+  O -- Yes --> Q["Return audiences[audience]"]
+              </div>
+            </div>
+            <p class="caption">
+              Profiles are loaded once from disk and cached in <code>_PROFILES</code>.
+              Subsequent calls skip the file read entirely.
+            </p>
+          </div>
+        </div>
+
+        <!-- 04 Config Schema -->
+        <div class="section" id="v-config-schema">
+          <div class="section-header">
+            <span class="num">04</span>
+            <h2>Agent Profiles Data Structure</h2>
+            <span class="src">config_file_dataShape_visual.md</span>
+          </div>
+          <div class="section-body">
+            <h3>YAML Configuration Schema</h3>
+            <pre>
+agent_profiles.yaml (top-level dict)
+├── audiences (dict, required, non-empty)
+│   ├── &lt;audience_name_1&gt; (dict)
+│   │   ├── display_name       (string, required)
+│   │   ├── system_prompt      (string, required)
+│   │   ├── required_sections  (list[string], required)
+│   │   └── default_max_words  (int &gt; 0, required)
+│   └── &lt;audience_name_2&gt; ...
+│
+├── routing (dict, required)
+│   ├── auto_router_prompt         (string, required)
+│   └── low_confidence_threshold   (number 0..1, required)
+│
+├── evaluation (dict, required)
+│   └── evaluator_prompt   (string, required)
+│
+└── generation (dict, required)
+    └── prompt   (string, required)</pre>
+            <p class="caption">
+              All top-level keys are required. <code>audiences</code> must contain at least one named entry.
+            </p>
+          </div>
+        </div>
+
+      </div><!-- /panel-visuals -->
+
+
+      <!-- ── TAB 2: Database Schema ───────────────────────── -->
+      <div class="tab-panel" id="panel-db">
+
+        <div class="page-header">
+          <h1>Database Schema</h1>
+          <p>Entity relationships, table structure, indexes, and job lifecycle</p>
+        </div>
+
+        <!-- 01 ER Diagram -->
+        <div class="section" id="db-er">
+          <div class="section-header">
+            <span class="num">01</span>
+            <h2>Entity Relationship Diagram</h2>
+            <span class="src">db_schema_visual.md</span>
+          </div>
+          <div class="section-body">
+            <h3>PK = Primary Key &nbsp;|&nbsp; FK = Foreign Key</h3>
+            <div class="diagram-box">
+              <div class="mermaid">
+erDiagram
+    Document {
+        int      id           PK
+        text     content
+        text     source_type
+        datetime created_at
+    }
+    Job {
+        int      id                       PK
+        int      document_id              FK
+        text     selected_audience
+        text     audience
+        float    routing_confidence
+        text     routing_candidates_json
+        text     routing_reasons_json
+        text     status
+        int      attempt_count
+        int      max_words
+        int      max_retries
+        datetime created_at
+    }
+    JobAttempt {
+        int      id                           PK
+        int      job_id                       FK
+        int      attempt_no
+        text     audience
+        text     agent_used
+        text     generated_one_line_summary
+        text     generated_tags_json
+        text     generated_clues_json
+        text     generated_bullets_json
+        text     generated_mindmap
+        text     evaluator_json
+        bool     passed
+        datetime created_at
+    }
+    Tag {
+        int  id    PK
+        text name
+    }
+    DocumentTag {
+        int  document_id  PK
+        int  tag_id       PK
+    }
+    DocumentClue {
+        int      id           PK
+        int      document_id  FK
+        text     clue_text
+        datetime created_at
+    }
+
+    Document    ||--o{ Job          : "has"
+    Job         ||--o{ JobAttempt   : "has"
+    Document    ||--o{ DocumentClue : "has"
+    DocumentTag }o--|| Document     : ""
+    DocumentTag }o--|| Tag          : ""
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 02 Table Tree -->
+        <div class="section" id="db-tree">
+          <div class="section-header">
+            <span class="num">02</span>
+            <h2>Table &amp; Relationship Tree</h2>
+            <span class="src">db_schema_visual.md</span>
+          </div>
+          <div class="section-body">
+            <h3>Full column &amp; FK reference</h3>
+            <pre>
+Tables &amp; Relationships
+│
+├── Document                   Core content record
+│   ├── id (PK)
+│   ├── content
+│   ├── source_type
+│   └── created_at
+│       │
+│       ├──&lt; Job                One document → many jobs
+│       │     ├── id (PK)
+│       │     ├── document_id (FK → Document.id)  [indexed]
+│       │     ├── selected_audience
+│       │     ├── audience
+│       │     ├── routing_confidence
+│       │     ├── routing_candidates_json
+│       │     ├── routing_reasons_json
+│       │     ├── status
+│       │     ├── attempt_count
+│       │     ├── max_words
+│       │     ├── max_retries
+│       │     └── created_at
+│       │           │
+│       │           └──&lt; JobAttempt      One job → many attempts
+│       │                 ├── id (PK)
+│       │                 ├── job_id (FK → Job.id)  [indexed]
+│       │                 ├── attempt_no
+│       │                 ├── audience
+│       │                 ├── agent_used
+│       │                 ├── generated_one_line_summary
+│       │                 ├── generated_tags_json
+│       │                 ├── generated_clues_json
+│       │                 ├── generated_bullets_json
+│       │                 ├── generated_mindmap
+│       │                 ├── evaluator_json
+│       │                 ├── passed
+│       │                 └── created_at
+│       │
+│       ├──&lt; DocumentClue       One document → many clues
+│       │     ├── id (PK)
+│       │     ├── document_id (FK → Document.id)  [indexed]
+│       │     ├── clue_text
+│       │     └── created_at
+│       │
+│       └──&lt; DocumentTag        Join table (many-to-many with Tag)
+│             ├── document_id (PK, FK → Document.id)  [indexed]
+│             └── tag_id      (PK, FK → Tag.id)       [indexed]
+│
+└── Tag                         Global tag registry
+      ├── id (PK)
+      └── name  [unique, indexed]</pre>
+            <p class="caption">└──&lt; denotes a one-to-many relationship from parent to child</p>
+          </div>
+        </div>
+
+        <!-- 03 Indexes -->
+        <div class="section" id="db-indexes">
+          <div class="section-header">
+            <span class="num">03</span>
+            <h2>Indexes</h2>
+            <span class="src">db_schema_visual.md</span>
+          </div>
+          <div class="section-body">
+            <h3>All DB indexes and their purpose</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Index Name</th>
+                  <th>Table</th>
+                  <th>Column(s)</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><code>ix_job_document_id</code></td>          <td>job</td>          <td>document_id</td> <td>FK lookup — find jobs for a document</td></tr>
+                <tr><td><code>ix_jobattempt_job_id</code></td>        <td>jobattempt</td>   <td>job_id</td>      <td>FK lookup — find attempts for a job</td></tr>
+                <tr><td><code>ix_documentclue_document_id</code></td> <td>documentclue</td> <td>document_id</td> <td>FK lookup — find clues for a document</td></tr>
+                <tr><td><code>ix_documenttag_document_id</code></td>  <td>documenttag</td>  <td>document_id</td> <td>FK lookup — find tags for a document</td></tr>
+                <tr><td><code>ix_documenttag_tag_id</code></td>       <td>documenttag</td>  <td>tag_id</td>      <td>FK lookup — find documents with a tag</td></tr>
+                <tr><td><em>(auto — unique)</em></td>                 <td>tag</td>          <td>name</td>        <td>Enforce uniqueness &amp; fast name lookup</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 04 Job Status Flow -->
+        <div class="section" id="db-status">
+          <div class="section-header">
+            <span class="num">04</span>
+            <h2>Job Status Flow</h2>
+            <span class="src">db_schema_visual.md</span>
+          </div>
+          <div class="section-body">
+            <h3>Lifecycle: pending → running → done / failed</h3>
+            <div class="diagram-box">
+              <div class="mermaid">
+stateDiagram-v2
+    [*] --> pending
+    pending --> running
+    running --> done
+    running --> failed
+    failed --> running : retry (attempt_count &lt; max_retries)
+    failed --> [*]
+    done --> [*]
+              </div>
+            </div>
+            <p class="caption">
+              Jobs retry up to <code>max_retries</code> (default&nbsp;2) before permanently staying in <code>failed</code>.
+            </p>
+          </div>
+        </div>
+
+      </div><!-- /panel-db -->
+
+    </main>
+  </div><!-- /layout -->
+
+  <script>
+    mermaid.initialize({ startOnLoad: false, theme: "default" });
+
+    // Track which panels have already been rendered
+    const rendered = new Set();
+
+    function addZoomButtons(panelId) {
+      document.querySelectorAll("#" + panelId + " .diagram-box").forEach(box => {
+        if (box.closest(".diagram-wrap")) return; // already wrapped
+
+        // Wrap the diagram-box in a position:relative container that sits
+        // OUTSIDE the overflow:auto on .diagram-box, so the button isn't clipped
+        const wrap = document.createElement("div");
+        wrap.className = "diagram-wrap";
+        box.parentNode.insertBefore(wrap, box);
+        wrap.appendChild(box);
+
+        const btn = document.createElement("button");
+        btn.className   = "zoom-btn";
+        btn.textContent = "🔍 Zoom";
+        btn.title       = "Zoom diagram  (+/- keys, scroll wheel, drag to pan)";
+        btn.addEventListener("click", e => { e.stopPropagation(); openZoom(box); });
+        wrap.appendChild(btn);
+      });
+    }
+
+    function renderPanel(panelId) {
+      if (rendered.has(panelId)) return;
+      rendered.add(panelId);
+      const nodes = document.querySelectorAll("#" + panelId + " .mermaid");
+      // Add zoom buttons immediately — SVG is found at click-time, not now
+      addZoomButtons(panelId);
+      if (nodes.length) mermaid.run({ nodes });
+    }
+
+    // Render the initially visible tab on DOMContentLoaded
+    document.addEventListener("DOMContentLoaded", () => renderPanel("panel-visuals"));
+
+    /* ── Sidebar definitions ─────────────────────────────── */
+    const SIDEBARS = {
+      visuals: [
+        { num: "01", label: "LangGraph Pipeline",       href: "#v-graph" },
+        { num: "02", label: "LLM Call Flow",            href: "#v-llm" },
+        { num: "03", label: "Agent Profiles Loader",    href: "#v-config-flow" },
+        { num: "04", label: "Agent Profiles Schema",    href: "#v-config-schema" },
+      ],
+      db: [
+        { num: "01", label: "ER Diagram",               href: "#db-er" },
+        { num: "02", label: "Table Tree",               href: "#db-tree" },
+        { num: "03", label: "Indexes",                  href: "#db-indexes" },
+        { num: "04", label: "Job Status Flow",          href: "#db-status" },
+      ],
+    };
+
+    let currentTab = "visuals";
+
+    function buildSidebar(tab) {
+      const aside = document.getElementById("sidebar");
+      aside.innerHTML = `<div class="aside-title">${tab === "visuals" ? "Project Visuals" : "Database Schema"}</div>`;
+      SIDEBARS[tab].forEach(item => {
+        const a = document.createElement("a");
+        a.href = item.href;
+        a.innerHTML = `<span class="num">${item.num}</span>${item.label}`;
+        aside.appendChild(a);
+      });
+      highlightSidebar();
+    }
+
+    function highlightSidebar() {
+      const links = document.querySelectorAll("aside a");
+      links.forEach(l => l.classList.remove("active"));
+      if (links.length) links[0].classList.add("active");
+    }
+
+    function switchTab(tab, btn) {
+      if (tab === currentTab) return;
+      currentTab = tab;
+
+      // Toggle panels
+      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+      document.getElementById("panel-" + tab).classList.add("active");
+
+      // Toggle tab buttons
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      // Rebuild sidebar
+      buildSidebar(tab);
+
+      // Render Mermaid diagrams in this panel (first visit only)
+      renderPanel("panel-" + tab);
+
+      // Scroll to top of content
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    // Sidebar active highlight on scroll
+    function onScroll() {
+      const panel = document.getElementById("panel-" + currentTab);
+      if (!panel) return;
+      const sections = panel.querySelectorAll(".section");
+      const links    = document.querySelectorAll("aside a");
+      let current    = null;
+
+      sections.forEach(sec => {
+        if (sec.getBoundingClientRect().top <= 100) current = sec.id;
+      });
+
+      links.forEach(l => {
+        l.classList.toggle("active", l.getAttribute("href") === "#" + current);
+      });
+    }
+
+    window.addEventListener("scroll", onScroll);
+
+    // Init
+    buildSidebar("visuals");
+
+    /* ══════════════════════════════════════════════════════
+       ZOOM LIGHTBOX
+    ══════════════════════════════════════════════════════ */
+    let modal = null;
+    let stage = null;
+    let content = null;
+    let pctEl = null;
+
+    let scale = 1;
+    let panX = 0, panY = 0;
+    let dragging = false;
+    let dragStart = { x: 0, y: 0 };
+
+    function initZoomElements() {
+      if (modal && stage && content && pctEl) {
+        return true;
+      }
+      modal = document.getElementById("zoom-modal");
+      stage = document.getElementById("zoom-stage");
+      content = document.getElementById("zoom-content");
+      pctEl = document.getElementById("zt-pct");
+      return Boolean(modal && stage && content && pctEl);
+    }
+
+    function applyTransform(animate = false) {
+      if (!initZoomElements()) {
+        return;
+      }
+      content.style.transition = animate ? "transform 0.18s ease" : "none";
+      content.style.transform  = `translate(${panX}px, ${panY}px) scale(${scale})`;
+      pctEl.textContent = Math.round(scale * 100) + "%";
+    }
+
+    function openZoom(diagramBox) {
+      if (!initZoomElements()) {
+        return;
+      }
+      const svg = diagramBox.querySelector("svg");
+      if (!svg) return;
+      // Clone SVG and set explicit size so it renders properly
+      const clone = svg.cloneNode(true);
+      const vb = svg.viewBox.baseVal;
+      if (vb && vb.width) {
+        clone.setAttribute("width",  Math.min(vb.width,  900));
+        clone.setAttribute("height", Math.min(vb.height, 700));
+      } else {
+        clone.style.width  = "auto";
+        clone.style.height = "auto";
+        clone.style.maxWidth  = "80vw";
+        clone.style.maxHeight = "75vh";
+      }
+      content.innerHTML = "";
+      content.appendChild(clone);
+      scale = 1; panX = 0; panY = 0;
+      applyTransform(false);
+      modal.classList.add("open");
+      document.body.style.overflow = "hidden";
+    }
+
+    function closeZoom() {
+      if (!initZoomElements()) {
+        return;
+      }
+      modal.classList.remove("open");
+      document.body.style.overflow = "";
+    }
+
+    function zoom(delta, animate = true) {
+      if (!initZoomElements()) {
+        return;
+      }
+      scale = Math.min(6, Math.max(0.3, scale + delta));
+      applyTransform(animate);
+    }
+
+    // Click diagram boxes to open — capture phase fires before SVG internal handlers
+    document.addEventListener("click", e => {
+      if (e.target.closest(".zoom-toolbar")) return; // ignore toolbar clicks
+      const box = e.target.closest(".diagram-box");
+      if (box && !e.target.closest(".zoom-btn")) openZoom(box);
+    }, true);
+
+    document.addEventListener("DOMContentLoaded", () => {
+      if (!initZoomElements()) {
+        return;
+      }
+
+      // Toolbar buttons
+      document.getElementById("zt-in").addEventListener("click",    e => { e.stopPropagation(); zoom(+0.25); });
+      document.getElementById("zt-out").addEventListener("click",   e => { e.stopPropagation(); zoom(-0.25); });
+      document.getElementById("zt-reset").addEventListener("click", e => { e.stopPropagation(); scale = 1; panX = 0; panY = 0; applyTransform(true); });
+      document.getElementById("zt-close").addEventListener("click", e => { e.stopPropagation(); closeZoom(); });
+
+      // Close on backdrop click (outside the content box)
+      modal.addEventListener("click", e => { if (e.target === modal || e.target === stage) closeZoom(); });
+
+      // Mouse wheel zoom
+      stage.addEventListener("wheel", e => {
+        e.preventDefault();
+        zoom(e.deltaY < 0 ? +0.15 : -0.15, false);
+      }, { passive: false });
+
+      // Drag to pan
+      stage.addEventListener("mousedown", e => {
+        if (e.button !== 0) return;
+        dragging = true;
+        dragStart = { x: e.clientX - panX, y: e.clientY - panY };
+        stage.classList.add("dragging");
+      });
+      window.addEventListener("mousemove", e => {
+        if (!dragging) return;
+        panX = e.clientX - dragStart.x;
+        panY = e.clientY - dragStart.y;
+        applyTransform(false);
+      });
+      window.addEventListener("mouseup", () => { dragging = false; stage.classList.remove("dragging"); });
+
+      // Keyboard: Escape / +/-
+      window.addEventListener("keydown", e => {
+        if (!modal.classList.contains("open")) return;
+        if (e.key === "Escape")       closeZoom();
+        if (e.key === "+" || e.key === "=") zoom(+0.25);
+        if (e.key === "-")            zoom(-0.25);
+        if (e.key === "0")            { scale = 1; panX = 0; panY = 0; applyTransform(true); }
+      });
+    });
+  </script>
+
+  <!-- ── Zoom Modal ──────────────────────────────────────── -->
+  <div id="zoom-modal">
+    <div class="zoom-toolbar">
+      <span class="zt-label">Zoom</span>
+      <button id="zt-out"   title="Zoom out (-)">−</button>
+      <span   id="zt-pct"   class="zt-pct">100%</span>
+      <button id="zt-in"    title="Zoom in (+)">+</button>
+      <button id="zt-reset" title="Reset (0)" style="font-size:11px;width:auto;padding:0 10px;border-radius:12px;">1:1</button>
+      <button id="zt-close" class="zt-close" title="Close (Esc)">✕</button>
+    </div>
+    <div id="zoom-stage">
+      <div id="zoom-content"></div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -3,21 +3,53 @@
 {% block title %}About - Assort Design{% endblock %}
 
 {% block content %}
+  {# Optional: keep your existing "steps" hook, but provide a fallback if not supplied #}
+  {% if steps is defined and steps %}
+    {% set demo_steps = steps %}
+  {% else %}
+    {% set demo_steps = [
+      "Submit text or a URL",
+      "LLM routes the input to an audience specialist",
+      "LLM generates structured artifacts (summary, bullets, tags, clues, mind map)",
+      "LLM evaluates constraints (required sections + word limit)",
+      "System revises and retries if evaluation fails (within retry/timeout limits)",
+      "All attempts and final results are stored for review (SQLite)"
+    ] %}
+  {% endif %}
+
   <div class="card">
-    <h2>About / How It Works</h2>
+    <h2>About</h2>
     <p class="muted">
-      Assort Design is a lightweight demo that showcases an agentic workflow for professional audiences.
-      The purpose of this web app is to illustrate the process end-to-end for stakeholders in related fields.
+      Assort Design is a lightweight demo web app that showcases an <strong>agentic AI workflow</strong> for professional audiences.
+      It turns raw input into audience-specific, decision-oriented artifacts using a controlled loop:
+      <strong>route → generate → evaluate → revise (if needed) → persist</strong>.
+    </p>
+    <p class="muted" style="margin-top: 10px;">
+      Live demo: <a href="https://assortdemo.duckdns.org" target="_blank" rel="noopener noreferrer">assortdemo.duckdns.org</a><br/>
+      Source code: <a href="https://github.com/sanuwar/assort-design" target="_blank" rel="noopener noreferrer">github.com/sanuwar/assort-design</a>
     </p>
   </div>
 
   <div class="card">
     <h3>Pipeline Overview</h3>
     <ol>
-      {% for step in steps %}
+      {% for step in demo_steps %}
         <li>{{ step }}</li>
       {% endfor %}
     </ol>
+    <p class="muted" style="margin-top: 10px;">
+      Key idea: this is not a single LLM call. The system uses multiple LLM calls and may iterate until constraints are satisfied.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3>Project Visuals</h3>
+    <p class="muted">
+      Explore interactive diagrams of the LangGraph pipeline, LLM flow, and database schema.
+    </p>
+    <div class="actions">
+      <a class="button" href="#project-visuals">Open Project Visuals</a>
+    </div>
   </div>
 
   <div class="card">
@@ -25,9 +57,121 @@
     <ul>
       <li>One-line summary</li>
       <li>Decision bullets (3–5)</li>
-      <li>Tags and key clues</li>
+      <li>Tags</li>
+      <li>Key clues</li>
       <li>Mind map</li>
-      <li>Attempt history and evaluation feedback</li>
+      <li>Attempt history and evaluation feedback (pass/fail, missing sections, word count, reasons)</li>
     </ul>
+  </div>
+
+  <div class="card">
+    <h3>Lifecycle (Chronological)</h3>
+    <p><strong>Step 1 — Intake</strong><br/>
+      You submit pasted text or a URL. The app applies input size limits and safety checks (especially for URL fetching).
+    </p>
+    <p><strong>Step 2 — Audience Routing (LLM call #1)</strong><br/>
+      A routing model selects the best audience and returns a confidence score, candidate audiences, and routing reasons.
+      If confidence is below a threshold, the app falls back to a cross-functional audience.
+    </p>
+    <p><strong>Step 3 — Specialist Generation (LLM call #2)</strong><br/>
+      Using the chosen audience profile, the system generates structured artifacts:
+      summary, decision bullets, tags, key clues, and a mind map.
+    </p>
+    <p><strong>Step 4 — Evaluation (LLM call #3)</strong><br/>
+      An evaluator validates that constraints are satisfied (for example: required sections appear in the decision bullets,
+      and the output stays within a max-word limit).
+    </p>
+    <p><strong>Step 5 — Revision Loop (optional)</strong><br/>
+      If evaluation fails, the system retries with fixes until it passes, reaches max retries, or hits a pipeline timeout.
+    </p>
+    <p><strong>Step 6 — Persistence</strong><br/>
+      The app stores the input, routing artifacts, each attempt, evaluation feedback, and final outputs in SQLite
+      so results remain inspectable later.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3>LangGraph Orchestration</h3>
+    <p>
+      LangGraph is used to orchestrate the pipeline as a <strong>stateful graph</strong>.
+      Each step is modeled as a node, and edges determine when to continue, revise, or stop.
+      This makes the workflow explicit, inspectable, and reliable under retries and timeouts.
+    </p>
+
+    <p><strong>Core nodes in this app:</strong></p>
+    <ul>
+      <li><code>route_audience</code> — routes to an audience + confidence (LLM)</li>
+      <li><code>specialist_generate</code> — generates structured artifacts (LLM)</li>
+      <li><code>evaluate</code> — checks constraints and returns pass/fail (LLM)</li>
+      <li><code>persist_attempt</code> — writes the current attempt to the database</li>
+      <li><code>revise</code> — increments attempt count / retry bookkeeping</li>
+      <li><code>persist_results</code> — updates final job status and replaces tags/clues</li>
+    </ul>
+
+    <p class="muted" style="margin-top: 10px;">
+      If you see multiple attempts on a record, that is the graph driving a revision loop based on evaluator feedback.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3>Where to See the Evidence (UI)</h3>
+    <ul>
+      <li><strong>Records</strong> — your history of processed documents</li>
+      <li><strong>View Request / Job details</strong> — routing confidence, candidate audiences, reasons, attempts, evaluation output</li>
+      <li><strong>View Source</strong> — the stored input that the pipeline ran on</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Architecture at a Glance</h3>
+    <ul>
+      <li><strong>Web:</strong> FastAPI + Jinja templates</li>
+      <li><strong>Orchestration:</strong> LangGraph (nodes + edges + state + retries/timeouts)</li>
+      <li><strong>LLM:</strong> OpenAI Responses API client (multiple calls per job: route/generate/evaluate)</li>
+      <li><strong>Tracing:</strong> optional request-level tracing for node/LLM visibility</li>
+      <li><strong>Persistence:</strong> SQLite (documents, jobs, attempts, tags, clues)</li>
+    </ul>
+
+    <p><strong>Key files:</strong></p>
+    <ul>
+      <li><code>app/main.py</code> — routes/handlers and UI flow</li>
+      <li><code>app/config.py</code> — loads/validates agent profiles and defaults</li>
+      <li><code>app/models.py</code> — data model (traceability tables)</li>
+      <li><code>app/db.py</code> — SQLite init + schema/index setup</li>
+      <li><code>app/llm.py</code> — LLM calls, parsing, timeouts, mock mode, tracing hooks</li>
+      <li><code>app/graph.py</code> — LangGraph pipeline (nodes/edges/state, retries/timeouts)</li>
+      <li><code>app/agent_profiles.yaml</code> — prompts, routing threshold, required sections, max words</li>
+      <li><code>graph.md</code> — pipeline diagram</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Safety & Limits</h3>
+    <ul>
+      <li><strong>Input limit:</strong> a maximum size is enforced for both pasted text and URL fetch results</li>
+      <li><strong>URL safety:</strong> SSRF protections (blocks private/local network targets) + redirect limits</li>
+      <li><strong>Rate limiting:</strong> simple per-IP limit to reduce abuse</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Source Code & Deployment (Optional)</h3>
+    <p class="muted">
+      The project is containerized and published as an image, built via CI on merges, and served from a Linux VPS.
+      If you're reviewing this as part of an engineering evaluation, the repository includes Docker + CI/CD + deployment notes.
+    </p>
+  </div>
+
+  <div class="card" id="project-visuals">
+    <h3>Project Visuals (Interactive)</h3>
+    <p class="muted">
+      Zoom and pan the diagrams directly from this page.
+    </p>
+    <iframe
+      title="Assort Design Project Visuals"
+      src="/web/visuals"
+      style="width: 100%; height: 900px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px;"
+      loading="lazy"
+    ></iframe>
   </div>
 {% endblock %}

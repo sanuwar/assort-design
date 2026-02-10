@@ -14,7 +14,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import select
@@ -29,10 +29,15 @@ TEMPLATES_DIR = APP_DIR.parent / "templates"
 STATIC_DIR = APP_DIR.parent / "static"
 
 SAMPLE_TEXT = (
-    "Assort Design is developing a modular analysis workflow for biomedical content. "
-    "The workflow routes content to audience-specific specialists who generate a one-line "
-    "summary, key clues, decision bullets, and a mind map, followed by evaluation and revision "
-    "to meet constraints."
+    "Assort Design is a modular, agentic analysis workflow for biomedical content. "
+    "It ingests text or URLs, routes each document to an audience-specific specialist, "
+    "and generates decision-ready artifacts (one-line summary, key clues, 3-5 decision bullets, "
+    "tags, and a mind map). A separate evaluator checks required sections and word/format "
+    "constraints and triggers iterative revisions until the output passes; all routing signals, "
+    "attempts, and evaluation feedback are persisted so the reasoning trail is inspectable "
+    "end-to-end. The project is also a live demonstration of how much faster a single developer "
+    "can ship reliable, structured software by pairing with AI coding assistants like Codex and "
+    "Claude AI."
 )
 
 AUDIENCES = ["auto", "commercial", "medical_affairs", "r_and_d", "cross_functional"]
@@ -329,6 +334,12 @@ def about(request: Request) -> HTMLResponse:
             "steps": steps,
         },
     )
+
+
+@app.get("/web/visuals", response_class=HTMLResponse)
+def project_visuals() -> FileResponse:
+    visuals_path = APP_DIR.parent / "docs" / "project_visuals.html"
+    return FileResponse(visuals_path, media_type="text/html")
 
 
 @app.get("/web/documents", response_class=HTMLResponse)
