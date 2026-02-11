@@ -375,13 +375,75 @@
       border-radius: 12px;
       padding: 32px 40px;
       box-shadow: 0 24px 60px rgba(0,0,0,0.4);
-      max-width: 90vw;
+      max-width: min(90vw, 960px);
+      overflow: hidden;
     }
 
     #zoom-content svg {
       display: block;
       max-width: 100%;
       height: auto;
+    }
+
+    @media (max-width: 768px) {
+      #zoom-content {
+        padding: 16px 14px;
+        border-radius: 8px;
+        max-width: 92vw;
+      }
+      #zoom-stage {
+        align-items: flex-start;
+        padding-top: 68px;
+        overflow-y: auto;
+      }
+    }
+
+    /* ── Mobile ──────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      /* Sidebar: force hidden (override position:fixed with visibility) */
+      aside {
+        display: none !important;
+        visibility: hidden !important;
+      }
+
+      /* Full-width main — override the 220px left offset */
+      main {
+        margin-left: 0 !important;
+        padding: 16px 12px 60px !important;
+        max-width: 100vw !important;
+      }
+
+      /* Tab bar: hide brand, split tabs evenly */
+      .tab-bar .brand  { display: none !important; }
+      .tab-btn         { padding: 0 10px; font-size: 12px; flex: 1; justify-content: center; }
+      .tab-btn .tab-badge  { display: none; }
+      .tab-btn .tab-icon   { font-size: 14px; }
+
+      /* Section chrome */
+      .section-header  { padding: 10px 12px; flex-wrap: wrap; gap: 6px; }
+      .section-header .src { display: none; }
+      .section-body    { padding: 14px 12px; }
+      .section         { margin-bottom: 20px; }
+      .page-header     { margin-bottom: 16px; }
+      .page-header h1  { font-size: 19px; }
+      .page-header p   { font-size: 12px; }
+
+      /* Diagrams: horizontal scroll inside the box */
+      .diagram-wrap    { margin-bottom: 4px; }
+      .diagram-box     { overflow-x: auto !important; padding: 10px 6px; justify-content: flex-start; }
+
+      /* Zoom button always visible on mobile (no hover) */
+      .zoom-btn        { opacity: 1 !important; font-size: 11px; padding: 3px 8px; }
+
+      /* Zoom modal: full-screen, SVG scrollable inside */
+      #zoom-stage      { align-items: flex-start; padding-top: 64px; }
+      #zoom-content    { padding: 14px; max-width: 95vw; border-radius: 8px; overflow: hidden; }
+
+      /* Table horizontal scroll */
+      table            { display: block; overflow-x: auto; }
+
+      /* Pre / code: smaller font */
+      pre              { font-size: 11px; padding: 10px 12px; }
     }
 
     /* ── Print ───────────────────────────────────────────── */
@@ -894,6 +956,20 @@ stateDiagram-v2
 
     window.addEventListener("scroll", onScroll);
 
+    // ── Mobile layout: inline-style override (always beats CSS) ──
+    function applyMobileLayout() {
+      const aside  = document.getElementById("sidebar");
+      const mainEl = document.querySelector("main");
+      const mobile = window.innerWidth <= 768;
+      aside.style.display    = mobile ? "none"  : "";
+      aside.style.visibility = mobile ? "hidden": "";
+      mainEl.style.marginLeft = mobile ? "0"     : "";
+      mainEl.style.maxWidth   = mobile ? "100vw" : "";
+      mainEl.style.padding    = mobile ? "16px 12px 60px" : "";
+    }
+    applyMobileLayout();
+    window.addEventListener("resize", applyMobileLayout);
+
     // Init
     buildSidebar("visuals");
 
@@ -939,14 +1015,17 @@ stateDiagram-v2
       // Clone SVG and set explicit size so it renders properly
       const clone = svg.cloneNode(true);
       const vb = svg.viewBox.baseVal;
+      // Use actual viewport so SVG never exceeds the white modal box on any screen size
+      const maxW = Math.floor(window.innerWidth  * 0.85) - 28;
+      const maxH = Math.floor(window.innerHeight * 0.75);
       if (vb && vb.width) {
-        clone.setAttribute("width",  Math.min(vb.width,  900));
-        clone.setAttribute("height", Math.min(vb.height, 700));
+        clone.setAttribute("width",  Math.min(vb.width,  maxW));
+        clone.setAttribute("height", Math.min(vb.height, maxH));
       } else {
-        clone.style.width  = "auto";
-        clone.style.height = "auto";
-        clone.style.maxWidth  = "80vw";
-        clone.style.maxHeight = "75vh";
+        clone.style.width     = "auto";
+        clone.style.height    = "auto";
+        clone.style.maxWidth  = maxW  + "px";
+        clone.style.maxHeight = maxH  + "px";
       }
       content.innerHTML = "";
       content.appendChild(clone);
