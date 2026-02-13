@@ -175,7 +175,9 @@
       {% set high = risk_flags | selectattr("severity", "equalto", "high") | list | length %}
       {% set medium = risk_flags | selectattr("severity", "equalto", "medium") | list | length %}
       {% set low = risk_flags | selectattr("severity", "equalto", "low") | list | length %}
-      <p class="muted">Risk: {{ high }}H / {{ medium }}M / {{ low }}L</p>
+      <p class="muted">
+        Risk flags: {{ high }} High &nbsp;·&nbsp; {{ medium }} Medium &nbsp;·&nbsp; {{ low }} Low
+      </p>
       {% if high > 0 %}
         <p class="error">High severity risk detected.</p>
       {% endif %}

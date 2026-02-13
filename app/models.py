@@ -15,6 +15,7 @@ class Document(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     content: str
     source_type: str
+    source_url: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     jobs: List["Job"] = Relationship(back_populates="document")

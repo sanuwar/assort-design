@@ -767,7 +767,7 @@ def create_document(
     if len(content) > MAX_DOC_CHARS:
         content = content[:MAX_DOC_CHARS]
 
-    doc = Document(content=content, source_type=source_type)
+    doc = Document(content=content, source_type=source_type, source_url=input_url if source_type == "url" else None)
     job = Job(
         document_id=0,
         selected_audience=audience,
@@ -794,7 +794,7 @@ def run_job(request: Request, job_id: int) -> HTMLResponse:
         if not job:
             raise HTTPException(status_code=404, detail="Job not found.")
         run_job_pipeline(session, job)
-    return RedirectResponse(url=f"/web/jobs/{job_id}", status_code=303)
+    return RedirectResponse(url=f"/web/jobs/{job_id}?analysis=1", status_code=303)
 
 
 @app.get("/web/jobs/{job_id}", response_class=HTMLResponse)
@@ -896,10 +896,14 @@ def job_detail(request: Request, job_id: int) -> HTMLResponse:
             "cross_functional_detail": cross_functional_detail,
             "job_ref": f"JD-{job.id:06d}",
             "document": doc,
+            "source_url": doc.source_url if doc else None,
             "attempts": attempt_views,
             "tags": tags,
             "clues": clues,
             "final_summary": final_summary,
+            "auto_analysis": (
+                request.query_params.get("analysis") == "1" and final_summary is not None
+            ),
             "claims": claim_views,
             "risk_flags": risk_flags,
             "support_warning": supported_count < 3,

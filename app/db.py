@@ -16,6 +16,7 @@ def init_db() -> None:
     DB_DIR.mkdir(parents=True, exist_ok=True)
     SQLModel.metadata.create_all(engine)
     _ensure_job_columns()
+    _ensure_document_columns()
     _ensure_indexes()
 
 
@@ -34,6 +35,14 @@ def _ensure_job_columns() -> None:
             conn.execute(text("ALTER TABLE job ADD COLUMN routing_candidates_json TEXT"))
         if "routing_reasons_json" not in columns:
             conn.execute(text("ALTER TABLE job ADD COLUMN routing_reasons_json TEXT"))
+
+
+def _ensure_document_columns() -> None:
+    with engine.begin() as conn:
+        result = conn.execute(text("PRAGMA table_info(document)")).fetchall()
+        columns = {row[1] for row in result}
+        if "source_url" not in columns:
+            conn.execute(text("ALTER TABLE document ADD COLUMN source_url TEXT"))
 
 
 def _ensure_indexes() -> None:
