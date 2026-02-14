@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Tag Insights - Assort Design{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>Tag Intelligence</h2>
+    <p class="muted">
+      Insights derived from canonical tags and inferred domains across recent documents.
+    </p>
+    <div class="actions">
+      <a class="button" href="/web/tags/aliases">Manage Tag Aliases</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Topic Lanes (Domains)</h3>
+    {% if domain_counts %}
+      <ul>
+        {% for item in domain_counts %}
+          <li>
+            <a href="/web/documents?domain={{ item[0] | urlencode }}">{{ item[0] }}</a>
+            — {{ item[1] }}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No tag summaries available yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Rising Tags</h3>
+    {% if has_rising_history %}
+      {% if rising_tags %}
+        <ul>
+          {% for item in rising_tags %}
+            <li>
+              <strong>{{ item.tag }}</strong> — +{{ item.delta }} ({{ item.count }} in last 20)
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">No rising tags detected yet.</p>
+      {% endif %}
+    {% else %}
+      <p class="muted">Not enough history to compute rising tags (need 40 documents).</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Co-occurring Tag Pairs</h3>
+    {% if cooccurrence %}
+      <ul>
+        {% for item in cooccurrence %}
+          <li>{{ item.tag_a }} + {{ item.tag_b }} — {{ item.count }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No co-occurrence data yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Bridge Tags (Cross-Domain)</h3>
+    {% if bridge_tags %}
+      <ul>
+        {% for item in bridge_tags %}
+          <li>{{ item.tag }} — {{ item.domains }} domains</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No bridge tags yet.</p>
+    {% endif %}
+  </div>
+{% endblock %}

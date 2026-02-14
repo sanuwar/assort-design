@@ -14,6 +14,9 @@
           placeholder="Search content, tags, or clues"
           value="{{ query }}"
         />
+        {% if domain_filter %}
+          <input type="hidden" name="domain" value="{{ domain_filter }}" />
+        {% endif %}
         <select name="audience">
           <option value="all" {% if selected_audience == "all" %}selected{% endif %}>
             All routes
@@ -28,7 +31,7 @@
           {% endfor %}
         </select>
         <button class="button" type="submit">Search</button>
-        {% if query or selected_audience != "all" %}
+        {% if query or selected_audience != "all" or domain_filter %}
           <a class="button" href="/web/documents">Clear</a>
         {% endif %}
       </div>
@@ -39,7 +42,7 @@
     <h3>Route Filters</h3>
     <ul>
       <li>
-        <a href="/web/documents{% if query %}?q={{ query | urlencode }}{% endif %}">
+        <a href="/web/documents{% if query or domain_filter %}?{% endif %}{% if query %}q={{ query | urlencode }}{% endif %}{% if query and domain_filter %}&{% endif %}{% if domain_filter %}domain={{ domain_filter | urlencode }}{% endif %}">
           <strong>All</strong>
           {% if selected_audience == "all" %}
             <span class="muted">(selected)</span>
@@ -48,7 +51,7 @@
       </li>
       {% for aud in audiences %}
         <li>
-          <a href="/web/documents?audience={{ aud }}{% if query %}&q={{ query | urlencode }}{% endif %}">
+          <a href="/web/documents?audience={{ aud }}{% if query %}&q={{ query | urlencode }}{% endif %}{% if domain_filter %}&domain={{ domain_filter | urlencode }}{% endif %}">
             <strong
               class="{% if audience_display.get(aud, aud) == 'Cross-Functional' %}tooltip{% endif %}"
               {% if audience_display.get(aud, aud) == 'Cross-Functional' %}
@@ -88,6 +91,12 @@
         {% else %}
           <p class="muted">No summary yet.</p>
         {% endif %}
+        {% if show_tool_badges and doc.tool_summary %}
+          <p class="muted">
+            Citations: {{ doc.tool_summary.citations }}
+            &nbsp;·&nbsp; Risk: {{ doc.tool_summary.risk.high }} High / {{ doc.tool_summary.risk.medium }} Medium / {{ doc.tool_summary.risk.low }} Low
+          </p>
+        {% endif %}
         <div class="actions">
           {% if doc.job_id %}
             <a class="button" href="/web/jobs/{{ doc.job_id }}">View Request</a>
@@ -100,11 +109,11 @@
     <div class="card">
       <div class="pagination">
         {% if has_prev %}
-        <a class="button" href="/web/documents?page={{ page - 1 }}{% if selected_audience != "all" %}&audience={{ selected_audience }}{% endif %}{% if query %}&q={{ query | urlencode }}{% endif %}">Previous</a>
+        <a class="button" href="/web/documents?page={{ page - 1 }}{% if selected_audience != "all" %}&audience={{ selected_audience }}{% endif %}{% if query %}&q={{ query | urlencode }}{% endif %}{% if domain_filter %}&domain={{ domain_filter | urlencode }}{% endif %}">Previous</a>
         {% endif %}
         <span class="muted">Page {{ page }}</span>
         {% if has_next %}
-        <a class="button" href="/web/documents?page={{ page + 1 }}{% if selected_audience != "all" %}&audience={{ selected_audience }}{% endif %}{% if query %}&q={{ query | urlencode }}{% endif %}">Next</a>
+        <a class="button" href="/web/documents?page={{ page + 1 }}{% if selected_audience != "all" %}&audience={{ selected_audience }}{% endif %}{% if query %}&q={{ query | urlencode }}{% endif %}{% if domain_filter %}&domain={{ domain_filter | urlencode }}{% endif %}">Next</a>
         {% endif %}
       </div>
     </div>

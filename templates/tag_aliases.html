@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Tag Aliases - Assort Design{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2>Tag Alias Manager</h2>
+    <p class="muted">
+      Map noisy tags to canonical tags. Built-in defaults exist; database entries override them.
+    </p>
+    {% if error %}
+      <p class="error">{{ error }}</p>
+    {% endif %}
+    <form method="post" action="/web/tags/aliases">
+      <div class="row">
+        <div>
+          <label for="alias">Alias</label>
+          <input id="alias" name="alias" type="text" placeholder="genai" />
+        </div>
+        <div>
+          <label for="canonical">Canonical</label>
+          <input id="canonical" name="canonical" type="text" placeholder="generative ai" />
+        </div>
+      </div>
+      <div class="actions">
+        <button class="button" type="submit">Save Alias</button>
+        <a class="button" href="/web/insights/tags">Back to Insights</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Current Aliases</h3>
+    {% if aliases %}
+      <table>
+        <thead>
+          <tr>
+            <th>Alias</th>
+            <th>Canonical</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in aliases %}
+            <tr>
+              <td>{{ item.alias }}</td>
+              <td>{{ item.canonical }}</td>
+              <td>{{ item.created_at }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No aliases saved yet.</p>
+    {% endif %}
+  </div>
+{% endblock %}

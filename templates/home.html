@@ -1,22 +1,131 @@
 {% extends "base.html" %}
 
-{% block title %}Assort Design - Home{% endblock %}
+{% block title %}Assort App{% endblock %}
 
 {% block content %}
-  <div class="card">
-    <h2>Assort Design: Sort, Summarize, Decide</h2>
-    <p class="muted">
-      This workspace routes your content to the right audience and returns a one-line summary,
-      decision bullets, key clues, tags, and a mind map to speed up understanding.
-    </p>
+  <!-- ── Hero banner ── -->
+  <div class="hero-banner">
+    <div class="hero-graphic">
+      <div class="hero-orb hero-orb-1"></div>
+      <div class="hero-orb hero-orb-2"></div>
+      <div class="hero-orb hero-orb-3"></div>
+    </div>
+    <div class="hero-body">
+      <div class="hero-eyebrow">AI-powered content routing</div>
+      <h1 class="hero-title">Assort App</h1>
+      <p class="hero-sub">Sort content, direct insight.</p>
+      <div class="hero-chips">
+        <span class="hero-chip">&#128196; Paste text</span>
+        <span class="hero-chip">&#128279; Scrape URL</span>
+        <span class="hero-chip">&#128206; Upload PDF / Word</span>
+        <span class="hero-chip-arrow">&#8594; routed summary + mind map</span>
+      </div>
+    </div>
   </div>
+
+  <style>
+    .hero-banner {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, var(--accent) 0%, #1a4a7a 60%, #0a2244 100%);
+      border-radius: 16px;
+      padding: 44px 36px 44px 44px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      min-height: 180px;
+    }
+    .hero-graphic {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .hero-orb {
+      position: absolute;
+      border-radius: 999px;
+      opacity: 0.18;
+    }
+    .hero-orb-1 {
+      width: 260px; height: 260px;
+      background: var(--accent-2);
+      top: -80px; right: -60px;
+    }
+    .hero-orb-2 {
+      width: 140px; height: 140px;
+      background: #ffffff;
+      bottom: -50px; right: 180px;
+    }
+    .hero-orb-3 {
+      width: 80px; height: 80px;
+      background: var(--accent-2);
+      top: 30px; right: 260px;
+      opacity: 0.12;
+    }
+    .hero-body {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+    }
+    .hero-eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 8px;
+    }
+    .hero-title {
+      font-size: 36px;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0 0 6px;
+      line-height: 1.1;
+    }
+    .hero-sub {
+      font-size: 16px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.85);
+      margin: 0 0 20px;
+      letter-spacing: 0.2px;
+    }
+    .hero-chips {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .hero-chip {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.9);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 999px;
+    }
+    .hero-chip-arrow {
+      color: var(--accent-2);
+      font-size: 13px;
+      font-weight: 700;
+      background: rgba(233,69,96,0.15);
+      border: 1px solid rgba(233,69,96,0.35);
+      padding: 4px 14px;
+      border-radius: 999px;
+    }
+    @media (max-width: 600px) {
+      .hero-banner { padding: 28px 20px; min-height: unset; }
+      .hero-title  { font-size: 26px; }
+    }
+  </style>
 
   <div class="card">
     <h3>At a Glance</h3>
     <div class="stat-grid">
       <div class="stat-card">
         <div class="stat-value">{{ stats.total_docs }}</div>
-        <div class="muted">Documents</div>
+        <div class="muted">Content</div>
       </div>
       <div class="stat-card">
         <div class="stat-value">{{ stats.total_jobs }}</div>
@@ -39,52 +148,197 @@
 
   <div class="card">
     <h2>Start a New Analysis</h2>
-    <p class="muted">Paste text, enter a URL, or use the sample content.</p>
+
     {% if error %}
-      <p class="error">{{ error }}</p>
+      <p class="error" style="margin-bottom:12px;">{{ error }}</p>
     {% endif %}
-    <form method="post" action="/web/documents" data-loading>
-      <div class="row">
-        <div>
-          <label for="input_text">Paste Text</label>
-          <textarea id="input_text" name="input_text" placeholder="Paste text here..."></textarea>
+
+    <form method="post" action="/web/documents" enctype="multipart/form-data" data-loading>
+
+      <!-- ── Input-method tab bar ── -->
+      <div class="itab-bar">
+        <button type="button" class="itab active" onclick="switchInput('text', this)">
+          <span class="itab-icon">&#9998;</span> Paste Text
+        </button>
+        <button type="button" class="itab" onclick="switchInput('url', this)">
+          <span class="itab-icon">&#128279;</span> URL
+        </button>
+        <button type="button" class="itab" onclick="switchInput('file', this)">
+          <span class="itab-icon">&#128206;</span> Upload File
+        </button>
+      </div>
+
+      <!-- ── Panel: Paste Text ── -->
+      <div id="ipanel-text" class="ipanel">
+        <textarea id="input_text" name="input_text"
+          placeholder="Paste your document text here…" rows="7"></textarea>
+      </div>
+
+      <!-- ── Panel: URL ── -->
+      <div id="ipanel-url" class="ipanel" style="display:none;">
+        <input id="input_url" name="input_url" type="text"
+          placeholder="https://example.com/article" />
+        <p class="muted" style="margin-top:8px;font-size:12px;">
+          The page will be scraped and its text extracted automatically.
+        </p>
+      </div>
+
+      <!-- ── Panel: Upload File ── -->
+      <div id="ipanel-file" class="ipanel" style="display:none;">
+        <label for="upload_file" class="upload-zone" id="upload-zone-label">
+          <div class="upload-zone-icon">&#128206;</div>
+          <div class="upload-zone-title">Click to choose a file</div>
+          <div class="muted" style="font-size:12px;margin-top:4px;">PDF or Word (.docx) &nbsp;·&nbsp; max 10 MB</div>
+          <div id="upload-filename" class="upload-filename" style="display:none;"></div>
+          <input id="upload_file" name="upload_file" type="file" accept=".pdf,.docx"
+            style="display:none;" onchange="showFilename(this)" />
+        </label>
+      </div>
+
+      <!-- ── Bottom row: audience + sample + submit ── -->
+      <div class="form-footer">
+        <div class="form-footer-left">
+          <label for="audience" style="margin-bottom:4px;">Audience</label>
+          <select id="audience" name="audience">
+            {% for aud in audiences %}
+              <option
+                value="{{ aud }}"
+                {% if aud == selected_audience %}selected{% endif %}
+                {% if audience_display.get(aud, aud) == 'Cross-Functional' %}
+                  title="Mixed stakeholders (auto-routed)"
+                {% endif %}
+              >
+                {{ audience_display.get(aud, aud) }}
+              </option>
+            {% endfor %}
+          </select>
         </div>
-        <div>
-          <label for="input_url">URL</label>
-          <input id="input_url" name="input_url" type="text" placeholder="https://example.com/article" />
-          <div style="margin-top: 16px;">
-            <label for="audience">Audience (Auto by default)</label>
-            <select id="audience" name="audience">
-              {% for aud in audiences %}
-                <option
-                  value="{{ aud }}"
-                  {% if aud == selected_audience %}selected{% endif %}
-                  {% if audience_display.get(aud, aud) == 'Cross-Functional' %}
-                    title="Mixed stakeholders (auto-routed)"
-                  {% endif %}
-                >
-                  {{ audience_display.get(aud, aud) }}
-                </option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="actions">
-            <label>
-              <input type="checkbox" name="use_sample" />
-              Use sample content
-            </label>
-          </div>
+        <div class="form-footer-right">
+          <label class="sample-label">
+            <input type="checkbox" name="use_sample" />
+            Use sample content
+          </label>
+          <button class="button" type="submit">Sort &amp; Summarize &#8594;</button>
         </div>
       </div>
-      <div class="actions">
-        <button class="button" type="submit">Sort &amp; Summarize</button>
-      </div>
+
     </form>
   </div>
 
-  <div class="row">
+  <style>
+    /* ── Input method tabs ── */
+    .itab-bar {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+      border-bottom: 2px solid var(--card-border);
+      padding-bottom: 0;
+    }
+    .itab {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      padding: 8px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 6px 6px 0 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .itab:hover { color: var(--text); background: var(--bg); }
+    .itab.active { color: var(--accent); border-bottom-color: var(--accent-2); background: none; }
+    .itab-icon { font-size: 15px; }
+
+    /* ── Input panels ── */
+    .ipanel { min-height: 100px; }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 2px dashed var(--card-border);
+      border-radius: 12px;
+      padding: 36px 24px;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.15s, background 0.15s;
+      background: var(--bg);
+    }
+    .upload-zone:hover { border-color: var(--accent); background: #edf0f8; }
+    .upload-zone-icon { font-size: 36px; line-height: 1; margin-bottom: 10px; }
+    .upload-zone-title { font-weight: 600; font-size: 15px; color: var(--accent); }
+    .upload-filename {
+      margin-top: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent-2);
+      background: rgba(233,69,96,0.08);
+      padding: 4px 12px;
+      border-radius: 6px;
+    }
+
+    /* ── Form footer ── */
+    .form-footer {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--card-border);
+    }
+    .form-footer-left {
+      display: flex;
+      flex-direction: column;
+      min-width: 200px;
+      flex: 1;
+    }
+    .form-footer-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .sample-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      margin-bottom: 0;
+      white-space: nowrap;
+    }
+  </style>
+
+  <script>
+    function switchInput(panel, btn) {
+      document.querySelectorAll('.itab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.ipanel').forEach(p => p.style.display = 'none');
+      btn.classList.add('active');
+      document.getElementById('ipanel-' + panel).style.display = '';
+    }
+    function showFilename(input) {
+      var el = document.getElementById('upload-filename');
+      if (input.files && input.files[0]) {
+        el.textContent = '📄 ' + input.files[0].name;
+        el.style.display = '';
+        document.querySelector('.upload-zone-title').textContent = 'File selected';
+      }
+    }
+  </script>
+
+  <div class="home-bottom-row">
     <div class="card">
-      <h3>Recent Documents</h3>
+      <h3>Recent Content</h3>
       {% if history %}
         <ul>
           {% for item in history %}
@@ -139,25 +393,76 @@
         <p class="muted">No documents yet.</p>
       {% endif %}
     </div>
-    <div class="card">
+    <div class="card route-totals-card">
       <h3>Route Totals</h3>
-      <ul>
+      <ul class="route-list">
         {% for aud in audiences %}
           <li>
-            <a href="/web/documents?audience={{ aud }}">
-              <strong
-                class="{% if audience_display.get(aud, aud) == 'Cross-Functional' %}tooltip{% endif %}"
+            <a class="route-row" href="/web/documents?audience={{ aud }}">
+              <span
+                class="route-name{% if audience_display.get(aud, aud) == 'Cross-Functional' %} tooltip{% endif %}"
                 {% if audience_display.get(aud, aud) == 'Cross-Functional' %}
                   data-tip="Mixed stakeholders (see request for details)"
                 {% endif %}
-              >
-                {{ audience_display.get(aud, aud) }}
-              </strong>:
-              {{ route_counts.get(aud, 0) }}
+              >{{ audience_display.get(aud, aud) }}</span>
+              <span class="route-count">{{ route_counts.get(aud, 0) }}</span>
             </a>
           </li>
         {% endfor %}
       </ul>
     </div>
   </div>
+
+  <style>
+    .home-bottom-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+    @media (max-width: 700px) {
+      .home-bottom-row { grid-template-columns: 1fr; }
+    }
+    .route-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .route-list li + li {
+      border-top: 1px solid var(--card-border);
+    }
+    .route-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 4px;
+      color: inherit;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: background 0.12s;
+      gap: 8px;
+    }
+    .route-row:hover {
+      background: var(--bg);
+      text-decoration: none;
+      color: inherit;
+    }
+    .route-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      flex: 1;
+    }
+    .route-count {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--accent-2);
+      background: rgba(233,69,96,0.08);
+      border: 1px solid rgba(233,69,96,0.2);
+      border-radius: 999px;
+      min-width: 32px;
+      text-align: center;
+      padding: 1px 10px;
+    }
+  </style>
 {% endblock %}

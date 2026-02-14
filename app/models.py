@@ -15,6 +15,7 @@ class Document(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     content: str
     source_type: str
+    source_url: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     jobs: List["Job"] = Relationship(back_populates="document")
@@ -72,3 +73,42 @@ class DocumentClue(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     document: Optional[Document] = Relationship(back_populates="clues")
+
+
+class TagAlias(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    alias: str = Field(index=True, unique=True)
+    canonical: str = Field(index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class DocumentTagSummary(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    document_id: int = Field(foreign_key="document.id", index=True)
+    job_id: Optional[int] = Field(default=None, foreign_key="job.id", index=True)
+    domain: str = Field(index=True)
+    canonical_tags_json: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class DocumentClaim(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    document_id: int = Field(foreign_key="document.id", index=True)
+    job_id: Optional[int] = Field(default=None, foreign_key="job.id", index=True)
+    claim_text: str
+    quote_text: str = ""
+    source_start: Optional[int] = None
+    source_end: Optional[int] = None
+    confidence: float = 0.0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class DocumentRiskFlag(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    document_id: int = Field(foreign_key="document.id", index=True)
+    job_id: Optional[int] = Field(default=None, foreign_key="job.id", index=True)
+    severity: str
+    category: str
+    text_span: str
+    suggested_fix: str = ""
+    created_at: datetime = Field(default_factory=datetime.utcnow)

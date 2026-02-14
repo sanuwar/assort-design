@@ -16,7 +16,18 @@ from app.config import (
     get_routing_config,
 )
 from app.llm import evaluate_content, generate_content, route_audience
-from app.models import Document, DocumentClue, DocumentTag, Job, JobAttempt, Tag
+from app.models import (
+    Document,
+    DocumentClaim,
+    DocumentClue,
+    DocumentRiskFlag,
+    DocumentTag,
+    Job,
+    JobAttempt,
+    Tag,
+)
+from app.tag_intel import persist_tag_summary
+from app.tools import citation_finder, count_supported_citations, risk_checker
 
 def _get_pipeline_timeout() -> int:
     value = os.getenv("PIPELINE_TIMEOUT_SEC", "120")
@@ -33,6 +44,9 @@ def _build_graph(
     route_audience_node,
     specialist_generate_node,
     evaluate_node,
+    tool_citation_node,
+    tool_risk_node,
+    tool_gate_node,
     persist_attempt_node,
     revise_node,
     persist_results_node,
@@ -42,6 +56,9 @@ def _build_graph(
     graph.add_node("route_audience", route_audience_node)
     graph.add_node("specialist_generate", specialist_generate_node)
     graph.add_node("evaluate", evaluate_node)
+    graph.add_node("tool_citation", tool_citation_node)
+    graph.add_node("tool_risk", tool_risk_node)
+    graph.add_node("tool_gate", tool_gate_node)
     graph.add_node("persist_attempt", persist_attempt_node)
     graph.add_node("revise", revise_node)
     graph.add_node("persist_results", persist_results_node)
@@ -49,7 +66,10 @@ def _build_graph(
     graph.set_entry_point("route_audience")
     graph.add_edge("route_audience", "specialist_generate")
     graph.add_edge("specialist_generate", "evaluate")
-    graph.add_edge("evaluate", "persist_attempt")
+    graph.add_edge("evaluate", "tool_citation")
+    graph.add_edge("tool_citation", "tool_risk")
+    graph.add_edge("tool_risk", "tool_gate")
+    graph.add_edge("tool_gate", "persist_attempt")
     graph.add_conditional_edges(
         "persist_attempt",
         next_step,
@@ -187,6 +207,56 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
         )
         return new_state
 
+    def tool_citation_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        _ensure_not_timed_out(state)
+        bullets = state.get("bullets", [])
+        citations = citation_finder(document.content, bullets)
+        new_state = dict(state)
+        new_state["citations"] = citations
+        return new_state
+
+    def tool_risk_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        _ensure_not_timed_out(state)
+        bullets = state.get("bullets", [])
+        bullets_text = "\n".join([str(b) for b in bullets if str(b).strip()])
+        # Run on source document AND generated bullets for richer detection.
+        combined_text = "\n\n".join(filter(None, [document.content or "", bullets_text]))
+        risks = risk_checker(combined_text)
+        new_state = dict(state)
+        new_state["risk_flags"] = risks
+        return new_state
+
+    def tool_gate_node(state: Dict[str, Any]) -> Dict[str, Any]:
+        _ensure_not_timed_out(state)
+        citations = state.get("citations", [])
+        risks = state.get("risk_flags", [])
+        supported_count = count_supported_citations(citations)
+        high_risks = [flag for flag in risks if flag.severity == "high"]
+
+        evaluation = dict(state.get("evaluation", {}))
+        fix_instructions = list(state.get("fix_instructions", []))
+
+        support_warning = supported_count < 3
+        evaluation["support_warning"] = support_warning
+
+        hard_fail = False
+        if high_risks and supported_count == 0:
+            hard_fail = True
+            evaluation["pass"] = False
+            evaluation["fail_reasons"] = list(
+                evaluation.get("fail_reasons", [])
+            ) + ["High-risk claims without supporting citations."]
+            fix_instructions.append(
+                "Add citations for strong claims or soften the language."
+            )
+
+        new_state = dict(state)
+        new_state["evaluation"] = evaluation
+        new_state["passed"] = bool(evaluation.get("pass")) and not hard_fail
+        new_state["fix_instructions"] = fix_instructions
+        new_state["support_warning"] = support_warning
+        return new_state
+
     def persist_attempt_node(state: Dict[str, Any]) -> Dict[str, Any]:
         _ensure_not_timed_out(state)
         attempt_no = state["attempt_no"]
@@ -222,8 +292,51 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
 
         _replace_tags(session, document.id, state["tags"])
         _replace_clues(session, document.id, state["clues"])
+        session.exec(
+            delete(DocumentClaim).where(
+                DocumentClaim.document_id == document.id,
+                DocumentClaim.job_id == job.id,
+            )
+        )
+        session.exec(
+            delete(DocumentRiskFlag).where(
+                DocumentRiskFlag.document_id == document.id,
+                DocumentRiskFlag.job_id == job.id,
+            )
+        )
+        for item in state.get("citations", []):
+            session.add(
+                DocumentClaim(
+                    document_id=document.id,
+                    job_id=job.id,
+                    claim_text=item.claim_text,
+                    quote_text=item.quote_text,
+                    source_start=item.source_start,
+                    source_end=item.source_end,
+                    confidence=item.confidence,
+                )
+            )
+        for item in state.get("risk_flags", []):
+            session.add(
+                DocumentRiskFlag(
+                    document_id=document.id,
+                    job_id=job.id,
+                    severity=item.severity,
+                    category=item.category,
+                    text_span=item.text_span,
+                    suggested_fix=item.suggested_fix,
+                )
+            )
+        tag_summary = persist_tag_summary(
+            session,
+            document_id=document.id,
+            job_id=job.id,
+            raw_tags=state["tags"],
+        )
         session.commit()
-        return dict(state)
+        new_state = dict(state)
+        new_state.update(tag_summary)
+        return new_state
 
     def next_step(state: Dict[str, Any]) -> str:
         _ensure_not_timed_out(state)
@@ -237,6 +350,9 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
         route_audience_node,
         specialist_generate_node,
         evaluate_node,
+        tool_citation_node,
+        tool_risk_node,
+        tool_gate_node,
         persist_attempt_node,
         revise_node,
         persist_results_node,

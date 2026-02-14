@@ -3,17 +3,317 @@
 {% block title %}Job {{ job.id }} - Assort Design{% endblock %}
 
 {% block content %}
+<style>
+  .scorecard-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .stat-box {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    min-width: 90px;
+    text-align: center;
+  }
+  .stat-value {
+    display: block;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.1;
+  }
+  .stat-label {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .stat-box.stat-strong .stat-value { color: #1a7a4a; }
+  .stat-box.stat-medium .stat-value { color: #a06000; }
+  .stat-box.stat-weak   .stat-value { color: var(--muted); }
+  .stat-box.stat-high   .stat-value { color: var(--accent-2); }
+  .stat-box.stat-medium-risk .stat-value { color: #c07000; }
+
+  .citation-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 10px;
+  }
+  .citation-table th {
+    text-align: left;
+    padding: 6px 10px;
+    background: var(--bg);
+    border-bottom: 2px solid var(--card-border);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .citation-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--card-border);
+    vertical-align: top;
+  }
+  .citation-table tr:last-child td { border-bottom: none; }
+  .bullet-cell { max-width: 280px; }
+  .bullet-text-truncated {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .quote-cell { max-width: 320px; color: var(--muted); font-style: italic; }
+  .quote-cell-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .badge-strong { background: #e6f7ee; color: #1a7a4a; border: 1px solid #b2dfc6; }
+  .badge-medium { background: #fff6e0; color: #a06000; border: 1px solid #f5d580; }
+  .badge-weak   { background: #f5f5f5; color: #888;    border: 1px solid #ddd; }
+  .badge-none   { background: #fdf0f0; color: #c0392b; border: 1px solid #f5b7b1; }
+
+  .citation-inline {
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 8px;
+    font-size: 13px;
+  }
+  .citation-inline + .citation-inline { margin-top: 6px; }
+
+  .risk-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--card-border);
+    align-items: flex-start;
+  }
+  .risk-item:last-child { border-bottom: none; }
+  .risk-severity-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .risk-high   { background: #fdecea; color: #b71c1c; border: 1px solid #f5b7b1; }
+  .risk-medium { background: #fff8e1; color: #e65100; border: 1px solid #ffe082; }
+  .risk-low    { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+
+  .analysis-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 22px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .analysis-section-title:first-child { margin-top: 0; }
+
+  .panel-card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 14px;
+  }
+
+  .btn-toggle-active {
+    background: var(--accent) !important;
+    color: #fff !important;
+    border-color: var(--accent) !important;
+  }
+
+  .bullet-list { list-style: none; padding: 0; margin: 0; }
+  .bullet-list li {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .bullet-list li:last-child { border-bottom: none; }
+  .bullet-text { font-size: 15px; line-height: 1.5; }
+
+  details.citation-detail > summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--accent);
+    margin-top: 6px;
+    display: inline-block;
+    user-select: none;
+  }
+  details.citation-detail > summary:hover { text-decoration: underline; }
+
+  .mindmap-wrap { position: relative; }
+
+  /* Button variants */
+  .button-primary {
+    background: var(--accent) !important;
+    color: #fff !important;
+    border-color: var(--accent) !important;
+    font-weight: 600;
+  }
+  .button-secondary {
+    background: transparent !important;
+    color: var(--muted) !important;
+    border: 1px solid var(--card-border) !important;
+    font-size: 13px;
+  }
+  .button-secondary:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+
+  /* Pipeline flow */
+  .pipeline-flow {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pipeline-step {
+    flex: 1;
+    min-width: 120px;
+    max-width: 180px;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 14px 12px;
+    text-align: center;
+  }
+  .pipeline-icon { font-size: 22px; margin-bottom: 6px; }
+  .pipeline-step-name {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .pipeline-step-desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .pipeline-arrow {
+    font-size: 20px;
+    color: var(--card-border);
+    align-self: center;
+    flex-shrink: 0;
+    padding: 0 2px;
+  }
+  @media (max-width: 720px) {
+    .pipeline-arrow { display: none; }
+    .pipeline-step { min-width: 140px; }
+  }
+
+  /* Outputs grid */
+  .outputs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 600px) { .outputs-grid { grid-template-columns: 1fr; } }
+  .output-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+  }
+  .output-num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .output-item p { margin: 3px 0 0; font-size: 13px; }
+
+  /* Analysis Ready card */
+  .analysis-ready-card { border-left: 4px solid var(--accent); }
+  .analysis-ready-summary {
+    font-size: 16px;
+    line-height: 1.6;
+    font-weight: 500;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .analysis-ready-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .ready-stat {
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 13px;
+  }
+  .ready-stat-risk { border-color: #f5b7b1; background: #fdecea; color: #b71c1c; }
+  .ready-stat-ok   { border-color: #a5d6a7; background: #e8f5e9; color: #2e7d32; }
+  .analysis-ready-hints {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .ready-hint {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    transition: border-color 0.15s;
+  }
+  .ready-hint:hover { border-color: var(--accent); }
+  .ready-hint-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+  .ready-hint p { margin: 3px 0 0; font-size: 12px; }
+
+  /* Same visual as .mermaid before the class is swapped on reveal */
+  .mermaid-deferred {
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 14px;
+    overflow-x: auto;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+    color: var(--muted);
+    white-space: pre-wrap;
+  }
+</style>
+
+  {# ── Header card ─────────────────────────────────── #}
   <div class="card">
     <h2>
       Request {{ job_ref }}
       <span
         class="badge badge-inline{% if cross_functional_detail %} tooltip{% endif %}"
-        {% if cross_functional_detail %}
-          data-tip="{{ cross_functional_detail }}"
-        {% endif %}
-      >
-        {{ audience_label }}
-      </span>
+        {% if cross_functional_detail %}data-tip="{{ cross_functional_detail }}"{% endif %}
+      >{{ audience_label }}</span>
     </h2>
     <p class="muted">
       Audience: {{ audience_label }} •
@@ -22,216 +322,642 @@
     {% if routing_confidence_pct is not none %}
       <p class="muted">
         Routing confidence: {{ routing_confidence_pct }}%
-        {% if routing_candidates %}
-          • Candidates: {{ routing_candidates | join(", ") }}
-        {% endif %}
+        {% if routing_candidates %} • Candidates: {{ routing_candidates | join(", ") }}{% endif %}
       </p>
     {% endif %}
     {% if routing_reasons %}
-      <p class="muted">
-        Routing reasons: {{ routing_reasons | join("; ") }}
-      </p>
+      <p class="muted">Routing reasons: {{ routing_reasons | join("; ") }}</p>
+    {% endif %}
+    {% if final_summary and support_warning %}
+      <p class="error">Needs review: fewer than 3 supported citations found.</p>
     {% endif %}
   </div>
 
+  {# ── Running banner ───────────────────────────────── #}
   {% if job.status == "running" %}
     <div class="card status-banner">
       <h3>Analysis in Progress</h3>
       <p class="muted">Your request is being processed. This page will refresh automatically.</p>
-      <div class="progress">
-        <div class="progress-bar"></div>
-      </div>
+      <div class="progress"><div class="progress-bar"></div></div>
     </div>
-    <script>
-      setTimeout(function () {
-        window.location.reload();
-      }, 5000);
-    </script>
+    <script>setTimeout(function(){ window.location.reload(); }, 5000);</script>
   {% endif %}
 
+  {# ── Action bar (adapts to whether analysis exists) ── #}
   <div class="sticky-actions">
-    <form method="post" action="/web/jobs/{{ job.id }}/run" data-loading>
-      <button class="button" type="submit">Analyze Now</button>
-    </form>
-    {% if document %}
-      <a class="button" href="/web/documents/{{ document.id }}">View Source</a>
+    {% if final_summary %}
+      {# Post-analysis: View Analysis is primary #}
+      <button class="button button-primary" id="btn-analysis"
+        onclick="togglePanel('analysis-panel', 'btn-analysis', 'View Analysis', 'Hide Analysis', revealMindMap)">
+        View Analysis
+      </button>
+      {% if document %}
+        <button class="button" id="btn-source"
+          onclick="togglePanel('source-panel', 'btn-source', 'View Source', 'Hide Source')">
+          View Source
+        </button>
+      {% endif %}
+      <form method="post" action="/web/jobs/{{ job.id }}/run" data-loading style="display:inline">
+        <button class="button button-secondary" type="submit">Re-run Analysis</button>
+      </form>
+    {% else %}
+      {# Pre-analysis: Run is primary #}
+      <form method="post" action="/web/jobs/{{ job.id }}/run" data-loading style="display:inline">
+        <button class="button button-primary" type="submit">Run Analysis</button>
+      </form>
+      {% if document %}
+        <button class="button" id="btn-source"
+          onclick="togglePanel('source-panel', 'btn-source', 'View Source', 'Hide Source')">
+          View Source
+        </button>
+      {% endif %}
     {% endif %}
-    <a class="button" href="/web">Back Home</a>
   </div>
 
-  <div class="row">
-    <div class="card">
-      <h3>Analyze Now</h3>
-      <p class="muted">Runs the pipeline and returns outputs in this order:</p>
-      <ul>
-        <li>One-line summary</li>
-        <li>Decision bullets (3–5)</li>
-        <li>Tags</li>
-        <li>Key clues</li>
-        <li>Mind map</li>
-      </ul>
-      <div class="actions">
-        <form method="post" action="/web/jobs/{{ job.id }}/run" data-loading>
-          <button class="button" type="submit">Analyze Now</button>
-        </form>
-      </div>
-    </div>
-    <div class="card">
-      <h3>View Source</h3>
-      <p class="muted">Open the original document text used for analysis.</p>
-      <div class="actions">
-        {% if document %}
-          <a class="button" href="/web/documents/{{ document.id }}">View Source</a>
+  {# ── View Source panel ────────────────────────────── #}
+  {% if document %}
+    <div id="source-panel" class="hidden">
+      <div class="card">
+        <h3>Source <span class="badge badge-inline">{{ document.source_type }}</span></h3>
+        {% if source_url %}
+          <p style="margin-bottom:10px">
+            <a href="{{ source_url }}" target="_blank" rel="noopener noreferrer"
+               title="{{ source_url }}"
+               style="word-break:break-all;color:var(--accent)">{{ source_url }}</a>
+          </p>
+        {% endif %}
+        {% if document.content and document.content|length > 600 %}
+          <p class="muted">{{ document.content[:600] }}…</p>
+          <details>
+            <summary>Show full document</summary>
+            <p class="muted" style="white-space:pre-wrap">{{ document.content }}</p>
+          </details>
         {% else %}
-          <span class="muted">No document linked.</span>
+          <p class="muted" style="white-space:pre-wrap">{{ document.content }}</p>
         {% endif %}
       </div>
     </div>
-  </div>
+  {% endif %}
 
-  <div class="card">
-    <details>
-      <summary>Metadata (Attempts &amp; Trace Legend)</summary>
-      <h4>Attempt Timeline</h4>
-      {% if attempts %}
-        <div class="timeline">
-          {% for attempt in attempts %}
-            <div class="timeline-item">
-              <span class="timeline-dot {% if attempt.passed %}passed{% else %}failed{% endif %}"></span>
-              Attempt {{ attempt.attempt_no }}
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <p class="muted">No attempts yet.</p>
+  {# ── Analysis Ready card (post-run summary) ─────────── #}
+  {% if final_summary and job.status != "running" %}
+    <div class="card analysis-ready-card">
+
+      {# One-line summary — always visible #}
+      {% if final_summary.one_line_summary %}
+        <p class="analysis-ready-summary">{{ final_summary.one_line_summary }}</p>
       {% endif %}
 
-      <h4>Attempts</h4>
-      {% if attempts %}
-        <ul>
-          {% for attempt in attempts %}
+      {# Quick stats row #}
+      <div class="analysis-ready-stats">
+        {% if final_summary.decision_bullets %}
+          <span class="ready-stat">
+            <strong>{{ final_summary.decision_bullets | length }}</strong> bullets
+          </span>
+        {% endif %}
+        {% if citation_summary.supported > 0 %}
+          <span class="ready-stat">
+            <strong>{{ citation_summary.supported }}</strong>
+            citation{{ "s" if citation_summary.supported != 1 else "" }}
+            <span class="muted">({{ citation_summary.strong }} strong)</span>
+          </span>
+        {% endif %}
+        {% if tags %}
+          <span class="ready-stat"><strong>{{ tags | length }}</strong> tags</span>
+        {% endif %}
+        {% if clues %}
+          <span class="ready-stat"><strong>{{ clues | length }}</strong> clues</span>
+        {% endif %}
+        {% set high_n = risk_flags | selectattr("severity", "equalto", "high") | list | length %}
+        {% if high_n > 0 %}
+          <span class="ready-stat ready-stat-risk">
+            <strong>{{ high_n }}</strong> high-risk flag{{ "s" if high_n != 1 else "" }}
+          </span>
+        {% else %}
+          <span class="ready-stat ready-stat-ok">No high-risk flags</span>
+        {% endif %}
+      </div>
+
+      {# Button hint row #}
+      <div class="analysis-ready-hints">
+        <div class="ready-hint" onclick="document.getElementById('btn-analysis').click()" style="cursor:pointer">
+          <span class="ready-hint-icon">📊</span>
+          <div>
+            <strong>View Analysis</strong>
+            <p class="muted">Full breakdown — bullets, mind map, citations, risk &amp; scorecard</p>
+          </div>
+        </div>
+        {% if document %}
+          <div class="ready-hint" onclick="document.getElementById('btn-source').click()" style="cursor:pointer">
+            <span class="ready-hint-icon">📄</span>
+            <div>
+              <strong>View Source</strong>
+              <p class="muted">Original {% if source_url %}URL and scraped {% endif %}document text</p>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+    </div>
+  {% endif %}
+
+  {# ── Empty state (no analysis run yet) ──────────────── #}
+  {% if not final_summary and job.status != "running" %}
+    <div id="empty-state">
+
+      {# Pipeline flow #}
+      <div class="card">
+        <h3 style="margin-bottom:4px">How the Agentic Pipeline Works</h3>
+        <p class="muted" style="margin-bottom:18px">
+          Click <strong>Run Analysis</strong> above to start the workflow. The pipeline runs 5 stages automatically:
+        </p>
+        <div class="pipeline-flow">
+          <div class="pipeline-step">
+            <div class="pipeline-icon">🔀</div>
+            <div class="pipeline-step-name">Route Audience</div>
+            <div class="pipeline-step-desc">Classifies the document and selects the right specialist agent</div>
+          </div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-step">
+            <div class="pipeline-icon">✍️</div>
+            <div class="pipeline-step-name">Generate</div>
+            <div class="pipeline-step-desc">Specialist produces summary, bullets, mind map, tags &amp; clues</div>
+          </div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-step">
+            <div class="pipeline-icon">✅</div>
+            <div class="pipeline-step-name">Evaluate</div>
+            <div class="pipeline-step-desc">Checks format, word count &amp; bullet constraints — retries if needed</div>
+          </div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-step">
+            <div class="pipeline-icon">🔍</div>
+            <div class="pipeline-step-name">Cite &amp; Flag</div>
+            <div class="pipeline-step-desc">Finds source quotes backing each bullet; flags risk &amp; compliance issues</div>
+          </div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-step">
+            <div class="pipeline-icon">💾</div>
+            <div class="pipeline-step-name">Persist</div>
+            <div class="pipeline-step-desc">Saves all results, tags &amp; attempt trail to the database</div>
+          </div>
+        </div>
+      </div>
+
+      {# Outputs list #}
+      <div class="card">
+        <h3 style="margin-bottom:4px">What You'll Get After the Run</h3>
+        <p class="muted" style="margin-bottom:18px">
+          Seven analytical outputs — all viewable in <strong>View Analysis</strong> once the pipeline completes.
+        </p>
+        <div class="outputs-grid">
+          <div class="output-item">
+            <span class="output-num">1</span>
+            <div>
+              <strong>One-line Summary</strong>
+              <p class="muted">A single sentence capturing the core finding of the document.</p>
+            </div>
+          </div>
+          <div class="output-item">
+            <span class="output-num">2</span>
+            <div>
+              <strong>Decision Bullets</strong>
+              <p class="muted">3–5 actionable insights written for your specific audience.</p>
+            </div>
+          </div>
+          <div class="output-item">
+            <span class="output-num">3</span>
+            <div>
+              <strong>Mind Map</strong>
+              <p class="muted">A visual diagram of key concepts and their relationships.</p>
+            </div>
+          </div>
+          <div class="output-item">
+            <span class="output-num">4</span>
+            <div>
+              <strong>Tags</strong>
+              <p class="muted">Canonical topic labels for cross-document search and filtering.</p>
+            </div>
+          </div>
+          <div class="output-item">
+            <span class="output-num">5</span>
+            <div>
+              <strong>Key Clues</strong>
+              <p class="muted">Notable phrases, signals, and entities extracted from the source.</p>
+            </div>
+          </div>
+          <div class="output-item">
+            <span class="output-num">6</span>
+            <div>
+              <strong>Citation Finder</strong>
+              <p class="muted">Source quotes that support each decision bullet, rated Strong / Medium / Weak.</p>
+            </div>
+          </div>
+          <div class="output-item">
+            <span class="output-num">7</span>
+            <div>
+              <strong>Risk &amp; Compliance</strong>
+              <p class="muted">Flagged concerns ranked by severity — High, Medium, or Low.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>{# end empty-state #}
+  {% endif %}
+
+  {# ── View Analysis panel ──────────────────────────── #}
+  <div id="analysis-panel" class="hidden">
+
+    {# Compute risk counts for scorecard #}
+    {% set high_risk   = risk_flags | selectattr("severity", "equalto", "high")   | list %}
+    {% set medium_risk = risk_flags | selectattr("severity", "equalto", "medium") | list %}
+    {% set low_risk    = risk_flags | selectattr("severity", "equalto", "low")    | list %}
+    {% set bullet_count = (final_summary.decision_bullets | length) if (final_summary and final_summary.decision_bullets) else 0 %}
+
+    {# ── 1. One-line Summary ── #}
+    <div class="panel-card">
+      <p class="analysis-section-title">One-line Summary</p>
+      {% if final_summary and final_summary.one_line_summary %}
+        {% if final_summary.one_line_summary|length > 240 %}
+          <p>{{ final_summary.one_line_summary[:240] }}…</p>
+          <details><summary>Show full</summary><p>{{ final_summary.one_line_summary }}</p></details>
+        {% else %}
+          <p>{{ final_summary.one_line_summary }}</p>
+        {% endif %}
+      {% else %}
+        <p class="muted">No accepted summary yet.</p>
+      {% endif %}
+    </div>
+
+    {# ── 2. Decision Bullets with inline citations ── #}
+    <div class="panel-card">
+      <p class="analysis-section-title">Decision Bullets</p>
+      {% if final_summary and final_summary.decision_bullets %}
+        <ul class="bullet-list">
+          {% for bullet in final_summary.decision_bullets %}
+            {% set bullet_claims = claims | selectattr("claim_text", "equalto", bullet) | list %}
             <li>
-              Attempt {{ attempt.attempt_no }} —
-              {% if attempt.passed %}
-                Passed
+              <span class="bullet-text">{{ bullet }}</span>
+              {% if bullet_claims %}
+                <details class="citation-detail">
+                  <summary>View citation support ({{ bullet_claims | length }})</summary>
+                  {% for bc in bullet_claims %}
+                    <div class="citation-inline">
+                      {% if bc.quote_text %}
+                        <p class="quote-preview">{{ bc.quote_text }}</p>
+                        <div class="actions">
+                          <button class="button" type="button" data-copy="{{ bc.quote_text }}">Copy quote</button>
+                          {% if bc.context %}
+                            <button class="button" type="button"
+                              onclick="this.closest('details').querySelector('.ctx-{{ loop.index }}').classList.toggle('hidden')">
+                              Show context
+                            </button>
+                          {% endif %}
+                        </div>
+                        {% if bc.context %}
+                          <p class="muted ctx-{{ loop.index }} hidden" style="margin-top:6px">
+                            {{ bc.context.prefix }}{{ bc.context.before }}
+                            <strong>{{ bc.context.quote }}</strong>
+                            {{ bc.context.after }}{{ bc.context.suffix }}
+                          </p>
+                        {% endif %}
+                        {% if bc.source_start is not none and bc.source_end is not none %}
+                          <p class="muted" style="font-size:11px;margin-top:4px">
+                            Offsets: {{ bc.source_start }}–{{ bc.source_end }}
+                          </p>
+                        {% endif %}
+                      {% else %}
+                        <p class="muted">No supporting quote found.</p>
+                      {% endif %}
+                      <p class="muted" style="margin-top:6px;font-size:12px">
+                        Confidence: {{ (bc.confidence * 100) | round | int }}%
+                        {% if bc.confidence >= 0.8 %}
+                          <span class="badge badge-inline badge-strong">Strong</span>
+                        {% elif bc.confidence >= 0.6 %}
+                          <span class="badge badge-inline badge-medium">Medium</span>
+                        {% else %}
+                          <span class="badge badge-inline badge-weak">Weak</span>
+                        {% endif %}
+                      </p>
+                    </div>
+                  {% endfor %}
+                </details>
               {% else %}
-                Failed
+                <span class="muted" style="font-size:12px;margin-left:4px;display:inline-block;margin-top:4px">
+                  No citation found
+                </span>
               {% endif %}
-              <div class="muted">{{ attempt.summary_preview }}</div>
-              {% if not attempt.passed and attempt.fail_reasons %}
-                <div class="muted">Fail reasons: {{ attempt.fail_reasons | join(", ") }}</div>
-              {% endif %}
-              <div class="actions">
-                <a class="button" href="/web/attempts/{{ attempt.attempt_id }}">View Debug</a>
-              </div>
             </li>
           {% endfor %}
         </ul>
       {% else %}
-        <p class="muted">No attempts yet.</p>
+        <p class="muted">No decision bullets yet.</p>
       {% endif %}
-
-      <h4>Trace Legend</h4>
-      <ul class="legend-list">
-        <li><strong>Route Audience</strong>: Classifies the document into an audience.</li>
-        <li><strong>Specialist Generate</strong>: Produces one-line summary, key clues, decision bullets, mind map, and tags.</li>
-        <li><strong>Evaluate</strong>: Checks required sections, word count, and 3–5 bullet constraint.</li>
-        <li><strong>Persist Attempt</strong>: Saves the attempt record.</li>
-        <li><strong>Next Step</strong>: Decides whether to revise or persist results.</li>
-        <li><strong>Persist Results</strong>: Saves final clues and tags at the document level.</li>
-      </ul>
-    </details>
-  </div>
-
-  <div class="card">
-    <h3>One-line Summary</h3>
-    {% if final_summary and final_summary.one_line_summary %}
-      {% if final_summary.one_line_summary|length > 240 %}
-        <p>{{ final_summary.one_line_summary[:240] }}...</p>
-        <details>
-          <summary>Show full summary</summary>
-          <p>{{ final_summary.one_line_summary }}</p>
-        </details>
-      {% else %}
-        <p>{{ final_summary.one_line_summary }}</p>
-      {% endif %}
-    {% else %}
-      <p class="muted">No accepted summary yet.</p>
-    {% endif %}
-  </div>
-
-  <div class="card">
-    <h3>Decision Bullets</h3>
-    <p class="muted">Expected: 3–5 bullets.</p>
-    <div class="toggle-row">
-      <label>
-        <input
-          type="checkbox"
-          checked
-          onclick="document.getElementById('bullets-section').classList.toggle('hidden', !this.checked)"
-        />
-        Show bullets
-      </label>
-      <label>
-        <input
-          type="checkbox"
-          onclick="toggleMindMap('mindmap-section', this.checked)"
-        />
-        Show mind map
-      </label>
     </div>
-    {% if final_summary and final_summary.decision_bullets %}
-      <div id="bullets-section">
+
+    {# ── 3. Mind Map ── #}
+    <div class="panel-card">
+      <p class="analysis-section-title">Mind Map</p>
+      {% if final_summary and final_summary.mind_map %}
+        <div id="mindmap-section" class="mindmap-wrap">
+          <pre class="mermaid-deferred">{{ final_summary.mind_map }}</pre>
+        </div>
+      {% else %}
+        <p class="muted">No mind map yet.</p>
+      {% endif %}
+    </div>
+
+    {# ── 4. Tags ── #}
+    <div class="panel-card">
+      <p class="analysis-section-title">Tags</p>
+      {% if tags %}
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+          {% for tag in tags %}
+            <span class="badge badge-inline">{{ tag.name }}</span>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">No tags yet.</p>
+      {% endif %}
+    </div>
+
+    {# ── 5. Key Clues ── #}
+    <div class="panel-card">
+      <p class="analysis-section-title">Key Clues</p>
+      {% if clues %}
         <ul>
-          {% for bullet in final_summary.decision_bullets %}
-            <li>{{ bullet }}</li>
+          {% for clue in clues %}
+            <li>{{ clue.clue_text }}</li>
           {% endfor %}
         </ul>
-      </div>
-    {% else %}
-      <div id="bullets-section">
-        <p class="muted">No decision bullets yet.</p>
-      </div>
-    {% endif %}
-  </div>
+      {% else %}
+        <p class="muted">No clues yet.</p>
+      {% endif %}
+    </div>
 
-  <div class="card">
-    <h3>Mind Map</h3>
-    {% if final_summary and final_summary.mind_map %}
-      <div id="mindmap-section" class="hidden">
-        <pre class="mermaid">{{ final_summary.mind_map }}</pre>
-        <p class="muted">If needed, use the in-page "View source" button to see the raw mind map.</p>
-      </div>
-    {% else %}
-      <div id="mindmap-section" class="hidden">
-        <p class="muted">No mind map yet.</p>
-      </div>
-    {% endif %}
-  </div>
+    {# ── 6. Scorecard + Citation Table ── #}
+    <div class="panel-card">
+      <p class="analysis-section-title">Citation & Risk Scorecard</p>
 
-  <div class="card">
-    <h3>Tags</h3>
-    {% if tags %}
-      <ul>
-        {% for tag in tags %}
-          <li>{{ tag.name }}</li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="muted">No tags yet.</p>
-    {% endif %}
-  </div>
+      {# Scorecard strip #}
+      <div class="scorecard-strip">
+        <div class="stat-box">
+          <span class="stat-value">
+            {{ citation_summary.supported }}<span style="font-size:13px;font-weight:400;color:var(--muted)">/{{ bullet_count }}</span>
+          </span>
+          <span class="stat-label">Bullets cited</span>
+        </div>
+        <div class="stat-box stat-strong">
+          <span class="stat-value">{{ citation_summary.strong }}</span>
+          <span class="stat-label">Strong</span>
+        </div>
+        <div class="stat-box stat-medium">
+          <span class="stat-value">{{ citation_summary.medium }}</span>
+          <span class="stat-label">Medium</span>
+        </div>
+        <div class="stat-box stat-weak">
+          <span class="stat-value">{{ citation_summary.weak }}</span>
+          <span class="stat-label">Weak</span>
+        </div>
+        <div class="stat-box stat-high" style="border-left: 3px solid var(--accent-2);">
+          <span class="stat-value">{{ high_risk | length }}</span>
+          <span class="stat-label">High Risk</span>
+        </div>
+        <div class="stat-box stat-medium-risk">
+          <span class="stat-value">{{ medium_risk | length }}</span>
+          <span class="stat-label">Med Risk</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-value">{{ low_risk | length }}</span>
+          <span class="stat-label">Low Risk</span>
+        </div>
+      </div>
 
-  <div class="card">
-    <h3>Key Clues</h3>
-    {% if clues %}
-      <ul>
-        {% for clue in clues %}
-          <li>{{ clue.clue_text }}</li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="muted">No clues yet.</p>
+      {# Citation table #}
+      {% if final_summary and final_summary.decision_bullets %}
+        <table class="citation-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Bullet</th>
+              <th>Supporting Quote</th>
+              <th>Level</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for bullet in final_summary.decision_bullets %}
+              {% set bc_list = claims | selectattr("claim_text", "equalto", bullet) | list %}
+              {% set bc = bc_list[0] if bc_list else none %}
+              <tr>
+                <td style="color:var(--muted);font-size:12px">{{ loop.index }}</td>
+                <td class="bullet-cell">
+                  <div class="bullet-text-truncated">{{ bullet }}</div>
+                </td>
+                <td class="quote-cell">
+                  {% if bc and bc.quote_text %}
+                    <div class="quote-cell-text">"{{ bc.quote_text }}"</div>
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if bc and bc.quote_text %}
+                    {% if bc.confidence >= 0.8 %}
+                      <span class="badge badge-strong" style="padding:2px 8px;border-radius:6px;font-size:11px">Strong</span>
+                    {% elif bc.confidence >= 0.6 %}
+                      <span class="badge badge-medium" style="padding:2px 8px;border-radius:6px;font-size:11px">Medium</span>
+                    {% else %}
+                      <span class="badge badge-weak" style="padding:2px 8px;border-radius:6px;font-size:11px">Weak</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="badge badge-none" style="padding:2px 8px;border-radius:6px;font-size:11px">None</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="muted">No bullets to summarise.</p>
+      {% endif %}
+    </div>
+
+    {# ── 7. Risk & Compliance ── #}
+    <div class="panel-card">
+      <p class="analysis-section-title">Risk &amp; Compliance</p>
+      {% if risk_flags %}
+        <div>
+          {% for flag in risk_flags %}
+            <div class="risk-item">
+              <span class="risk-severity-badge risk-{{ flag.severity }}">{{ flag.severity }}</span>
+              <div>
+                <strong>{{ flag.category }}</strong>
+                <p class="muted" style="margin:3px 0 0">{{ flag.text_span }}</p>
+                {% if flag.suggested_fix %}
+                  <p class="muted" style="font-size:12px;margin:4px 0 0">
+                    Suggestion: {{ flag.suggested_fix }}
+                  </p>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">No risk flags detected.</p>
+      {% endif %}
+    </div>
+
+    {# ── 8. Metadata ── #}
+    <div class="panel-card">
+      <details>
+        <summary style="cursor:pointer;font-weight:600;color:var(--accent)">
+          Metadata (Attempts &amp; Trace Legend)
+        </summary>
+        <div style="margin-top:14px">
+          <h4>Attempt Timeline</h4>
+          {% if attempts %}
+            <div class="timeline">
+              {% for attempt in attempts %}
+                <div class="timeline-item">
+                  <span class="timeline-dot {% if attempt.passed %}passed{% else %}failed{% endif %}"></span>
+                  Attempt {{ attempt.attempt_no }}
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="muted">No attempts yet.</p>
+          {% endif %}
+
+          <h4 style="margin-top:14px">Attempts</h4>
+          {% if attempts %}
+            <ul>
+              {% for attempt in attempts %}
+                <li>
+                  Attempt {{ attempt.attempt_no }} —
+                  {% if attempt.passed %}Passed{% else %}Failed{% endif %}
+                  <div class="muted">{{ attempt.summary_preview }}</div>
+                  {% if not attempt.passed and attempt.fail_reasons %}
+                    <div class="muted">Fail reasons: {{ attempt.fail_reasons | join(", ") }}</div>
+                  {% endif %}
+                  <div class="actions">
+                    <a class="button" href="/web/attempts/{{ attempt.attempt_id }}">View Debug</a>
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">No attempts yet.</p>
+          {% endif %}
+
+          <h4 style="margin-top:14px">Trace Legend</h4>
+          <ul class="legend-list">
+            <li><strong>Route Audience</strong>: Classifies the document into an audience.</li>
+            <li><strong>Specialist Generate</strong>: Produces one-line summary, key clues, decision bullets, mind map, and tags.</li>
+            <li><strong>Evaluate</strong>: Checks required sections, word count, and 3–5 bullet constraint.</li>
+            <li><strong>Persist Attempt</strong>: Saves the attempt record.</li>
+            <li><strong>Next Step</strong>: Decides whether to revise or persist results.</li>
+            <li><strong>Persist Results</strong>: Saves final clues and tags at the document level.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+
+  </div>{# end analysis-panel #}
+
+  {# ── Related Documents ─────────────────────────────── #}
+  {% if related_docs %}
+    <div class="card">
+      <h3>Related Documents</h3>
+      <p class="muted" style="margin-bottom:14px">Similar documents matched by shared canonical tags.</p>
+      {% for doc in related_docs %}
+        <div class="card" style="margin-bottom:10px">
+          <div class="muted" style="margin-bottom:6px">
+            <strong>Similarity:</strong> {{ doc.score_pct }}%
+            &nbsp;·&nbsp;
+            <span class="status-chip status-{{ doc.status }}">{{ doc.status }}</span>
+            &nbsp;·&nbsp;
+            <span class="muted">{{ doc.audience }}</span>
+          </div>
+          <p style="margin:0 0 6px">{{ doc.snippet }}{% if doc.snippet|length == 160 %}…{% endif %}</p>
+          {% if doc.overlap %}
+            <p class="muted" style="font-size:12px;margin:0 0 8px">
+              <strong>Shared tags:</strong> {{ doc.overlap | join(", ") }}
+            </p>
+          {% endif %}
+          <div class="actions">
+            {% if doc.job_id %}
+              <a class="button" href="/web/jobs/{{ doc.job_id }}">View Request</a>
+            {% endif %}
+            <a class="button" href="/web/documents/{{ doc.document_id }}">View Document</a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <script>
+    // Toggle panels with active-button state
+    function togglePanel(panelId, btnId, labelShow, labelHide, onShow) {
+      var panel = document.getElementById(panelId);
+      var btn   = document.getElementById(btnId);
+      if (!panel) return;
+      var isHidden = panel.classList.contains('hidden');
+      panel.classList.toggle('hidden', !isHidden);
+      if (btn) {
+        btn.textContent = isHidden ? labelHide : labelShow;
+        btn.classList.toggle('btn-toggle-active', isHidden);
+      }
+      if (isHidden && typeof onShow === 'function') onShow();
+    }
+
+    // Mermaid rendering — called when analysis panel is revealed.
+    // Uses class "mermaid-deferred" on the <pre> so the global init in
+    // base.html (which runs on page load) never touches the hidden element.
+    // On reveal we swap the class to "mermaid" and call mermaid.run().
+    var _mindmapRendered = false;
+    function revealMindMap() {
+      if (_mindmapRendered) return;
+      _mindmapRendered = true;
+      var nodes = Array.from(
+        document.querySelectorAll('#mindmap-section .mermaid-deferred')
+      );
+      if (!nodes.length) return;
+      // Swap class so the element is recognised by mermaid + CSS
+      nodes.forEach(function(n) {
+        n.classList.remove('mermaid-deferred');
+        n.classList.add('mermaid');
+        n.removeAttribute('data-processed');
+      });
+      function runIt() {
+        if (window.mermaid && window.mermaid.run) {
+          window.mermaid.run({ nodes: nodes });
+        } else if (window.mermaid && window.mermaid.init) {
+          window.mermaid.init(undefined, nodes);
+        }
+      }
+      if (window.mermaid) { runIt(); }
+      else { setTimeout(runIt, 800); }
+    }
+
+    // Auto-open analysis panel when ?analysis=1 is in the URL
+    {% if auto_analysis %}
+    window.addEventListener('DOMContentLoaded', function() {
+      togglePanel('analysis-panel', 'btn-analysis', 'View Analysis', 'Hide Analysis', revealMindMap);
+    });
     {% endif %}
-  </div>
+
+    // Copy-to-clipboard (shared)
+    document.addEventListener('click', function(event) {
+      var button = event.target.closest('[data-copy]');
+      if (!button) return;
+      var text = button.getAttribute('data-copy') || '';
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(text).then(function() {
+        var original = button.textContent;
+        button.textContent = 'Copied';
+        setTimeout(function() { button.textContent = original; }, 1200);
+      });
+    });
+  </script>
 {% endblock %}

@@ -8,7 +8,8 @@
       "Bash(OPENAI_API_KEY=test python:*)",
       "Bash(pip show:*)",
       "Bash(grep:*)",
-      "Read(//c/AsortDesing/**)"
+      "Read(//c/AsortDesing/**)",
+      "Bash(pip install:*)"
     ]
   }
 }

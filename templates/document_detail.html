@@ -120,4 +120,96 @@
       <p class="muted">No clues yet.</p>
     {% endif %}
   </div>
+
+  <div class="card">
+    <h3>Tag Intelligence</h3>
+    {% if domain_label %}
+      <p><strong>Domain:</strong> {{ domain_label }}</p>
+    {% else %}
+      <p class="muted">No inferred domain yet.</p>
+    {% endif %}
+    {% if canonical_tags %}
+      <p class="muted">Canonical tags</p>
+      <ul>
+        {% for tag in canonical_tags %}
+          <li>{{ tag }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No canonical tags yet.</p>
+    {% endif %}
+    <div class="actions">
+      <a class="button" href="/web/insights/tags">View Tag Insights</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Tool Summary</h3>
+    {% if support_warning %}
+      <p class="error">Low support: fewer than 3 cited claims.</p>
+    {% endif %}
+    <p class="muted">Citations: {{ claims | selectattr("quote_text") | list | length }}</p>
+    {% if claims %}
+      {% for claim in claims[:3] %}
+        <details>
+          <summary>{{ claim.claim_text }}</summary>
+          {% if claim.quote_text %}
+            <p class="quote-preview">{{ claim.quote_text }}</p>
+            {% if claim.context %}
+              <p class="muted">
+                {{ claim.context.prefix }}{{ claim.context.before }}
+                <strong>{{ claim.context.quote }}</strong>
+                {{ claim.context.after }}{{ claim.context.suffix }}
+              </p>
+            {% endif %}
+          {% else %}
+            <p class="muted">No supporting quote found.</p>
+          {% endif %}
+        </details>
+      {% endfor %}
+    {% else %}
+      <p class="muted">No citations available yet.</p>
+    {% endif %}
+
+    {% if risk_flags %}
+      {% set high = risk_flags | selectattr("severity", "equalto", "high") | list | length %}
+      {% set medium = risk_flags | selectattr("severity", "equalto", "medium") | list | length %}
+      {% set low = risk_flags | selectattr("severity", "equalto", "low") | list | length %}
+      <p class="muted">
+        Risk flags: {{ high }} High &nbsp;·&nbsp; {{ medium }} Medium &nbsp;·&nbsp; {{ low }} Low
+      </p>
+      {% if high > 0 %}
+        <p class="error">High severity risk detected.</p>
+      {% endif %}
+    {% else %}
+      <p class="muted">No risk flags detected.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Related Documents</h3>
+    {% if related_docs %}
+      {% for doc in related_docs %}
+        <div class="card">
+          <div class="muted">
+            <strong>Similarity:</strong> {{ doc.score_pct }}%
+            • <span class="status-chip status-{{ doc.status }}">{{ doc.status }}</span>
+          </div>
+          <p class="muted"><strong>Audience:</strong> {{ doc.audience }}</p>
+          <p>{{ doc.snippet }}</p>
+          {% if doc.overlap %}
+            <p class="muted"><strong>Overlap:</strong> {{ doc.overlap | join(", ") }}</p>
+          {% endif %}
+          <div class="actions">
+            {% if doc.job_id %}
+              <a class="button" href="/web/jobs/{{ doc.job_id }}">View Request</a>
+            {% endif %}
+            <a class="button" href="/web/documents/{{ doc.document_id }}">View Source</a>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="muted">No related documents yet.</p>
+    {% endif %}
+  </div>
 {% endblock %}

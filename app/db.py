@@ -16,6 +16,7 @@ def init_db() -> None:
     DB_DIR.mkdir(parents=True, exist_ok=True)
     SQLModel.metadata.create_all(engine)
     _ensure_job_columns()
+    _ensure_document_columns()
     _ensure_indexes()
 
 
@@ -34,6 +35,14 @@ def _ensure_job_columns() -> None:
             conn.execute(text("ALTER TABLE job ADD COLUMN routing_candidates_json TEXT"))
         if "routing_reasons_json" not in columns:
             conn.execute(text("ALTER TABLE job ADD COLUMN routing_reasons_json TEXT"))
+
+
+def _ensure_document_columns() -> None:
+    with engine.begin() as conn:
+        result = conn.execute(text("PRAGMA table_info(document)")).fetchall()
+        columns = {row[1] for row in result}
+        if "source_url" not in columns:
+            conn.execute(text("ALTER TABLE document ADD COLUMN source_url TEXT"))
 
 
 def _ensure_indexes() -> None:
@@ -63,5 +72,59 @@ def _ensure_indexes() -> None:
             text(
                 "CREATE INDEX IF NOT EXISTS ix_documenttag_tag_id "
                 "ON documenttag (tag_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_tagalias_alias "
+                "ON tagalias (alias)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_tagalias_canonical "
+                "ON tagalias (canonical)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_doc_tag_summary_doc "
+                "ON documenttagsummary (document_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_doc_tag_summary_job "
+                "ON documenttagsummary (job_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_doc_tag_summary_domain "
+                "ON documenttagsummary (domain)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_doc_claim_doc "
+                "ON documentclaim (document_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_doc_claim_job "
+                "ON documentclaim (job_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_doc_risk_doc "
+                "ON documentriskflag (document_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_doc_risk_job "
+                "ON documentriskflag (job_id)"
             )
         )
