@@ -9,9 +9,10 @@
   {% else %}
     {% set demo_steps = [
       "Submit text or a URL",
-      "LLM routes the input to an audience specialist",
+      "ML router (with LLM fallback) routes the input to an audience specialist",
       "LLM generates structured artifacts (summary, bullets, tags, clues, mind map)",
       "LLM evaluates constraints (required sections + word limit)",
+      "Tool nodes extract citation claims and flag risk and compliance content",
       "System revises and retries if evaluation fails (within retry/timeout limits)",
       "All attempts and final results are stored for review (SQLite)"
     ] %}
@@ -20,9 +21,10 @@
   <div class="card">
     <h2>About</h2>
     <p class="muted">
-      Assort Design is a lightweight demo web app that showcases an <strong>agentic AI workflow</strong> for professional audiences.
-      It turns raw input into audience-specific, decision-oriented artifacts using a controlled loop:
-      <strong>route → generate → evaluate → revise (if needed) → persist</strong>.
+      Assort Design is a demo web app that showcases an <strong>agentic AI pipeline</strong> for professional audiences.
+      It turns raw input (pasted text or a URL) into audience-specific, decision-oriented artifacts using a
+      multi-step controlled loop:
+      <strong>route → generate → evaluate → cite/risk → persist (with a revision loop if needed)</strong>.
     </p>
     <p class="muted" style="margin-top: 10px;">
       Live demo: <a href="https://assortdemo.duckdns.org" target="_blank" rel="noopener noreferrer">assortdemo.duckdns.org</a><br/>
@@ -38,7 +40,9 @@
       {% endfor %}
     </ol>
     <p class="muted" style="margin-top: 10px;">
-      Key idea: this is not a single LLM call. The system uses multiple LLM calls and may iterate until constraints are satisfied.
+      Key idea: this is not a single LLM call. The system uses a deterministic ML model for routing,
+      multiple LLM calls for generation and evaluation, dedicated tool nodes for citation and risk analysis,
+      and may iterate the generation loop until all constraints are satisfied.
     </p>
   </div>
 
@@ -54,39 +58,66 @@
 
   <div class="card">
     <h3>What You Get</h3>
+    <p class="muted" style="margin-bottom: 10px;">Each processed document produces:</p>
     <ul>
-      <li>One-line summary</li>
-      <li>Decision bullets (3–5)</li>
-      <li>Tags</li>
-      <li>Key clues</li>
-      <li>Mind map</li>
-      <li>Attempt history and evaluation feedback (pass/fail, missing sections, word count, reasons)</li>
+      <li><strong>One-line summary</strong> — audience-specific headline</li>
+      <li><strong>Decision bullets</strong> (3–5) — structured takeaways for the routed audience</li>
+      <li><strong>Tags</strong> — extracted topics, normalized via alias map</li>
+      <li><strong>Key clues</strong> — notable signals or evidence phrases</li>
+      <li><strong>Mind map</strong> — Mermaid diagram of concept relationships</li>
+      <li><strong>Citation claims</strong> — specific claim/quote pairs with character-level source offsets and confidence scores</li>
+      <li><strong>Risk &amp; compliance flags</strong> — severity-ranked issues with category, text span, and suggested fix</li>
+      <li><strong>Attempt history</strong> — every revision attempt with evaluation feedback (pass/fail, missing sections, word count, reasons)</li>
     </ul>
   </div>
 
   <div class="card">
     <h3>Lifecycle (Chronological)</h3>
     <p><strong>Step 1 — Intake</strong><br/>
-      You submit pasted text or a URL. The app applies input size limits and safety checks (especially for URL fetching).
+      You submit pasted text or a URL. The app applies input size limits and safety checks
+      (SSRF protections for URLs, redirect limits, private network blocking).
     </p>
-    <p><strong>Step 2 — Audience Routing (LLM call #1)</strong><br/>
-      A routing model selects the best audience and returns a confidence score, candidate audiences, and routing reasons.
-      If confidence is below a threshold, the app falls back to a cross-functional audience.
+    <p><strong>Step 2 — Audience Routing (ML router or LLM)</strong><br/>
+      A TF-IDF + Logistic Regression ML model attempts routing first (Mode A: ML-first).
+      The model returns a probability distribution over three specialist audiences:
+      <em>Commercial</em>, <em>Medical Affairs</em>, and <em>R&amp;D</em>.
+      If the top-class probability is below the confidence threshold (<code>ml_router_threshold</code>),
+      or the gap between the top two classes is too narrow (<code>ml_router_margin</code>),
+      the system falls back to an LLM routing call.
+      If no trained model exists, the LLM is used directly.
+      Either path returns a confidence score, candidate audiences, routing reasons, and top feature signals.
+      Results below the LLM confidence threshold fall back to a <em>Cross-Functional</em> audience.
     </p>
-    <p><strong>Step 3 — Specialist Generation (LLM call #2)</strong><br/>
-      Using the chosen audience profile, the system generates structured artifacts:
-      summary, decision bullets, tags, key clues, and a mind map.
+    <p><strong>Step 3 — Specialist Generation (LLM)</strong><br/>
+      Using the chosen audience profile (system prompt, required sections, max words from
+      <code>agent_profiles.yaml</code>), the LLM generates structured artifacts:
+      one-line summary, decision bullets, tags, key clues, and a Mermaid mind map.
     </p>
-    <p><strong>Step 4 — Evaluation (LLM call #3)</strong><br/>
-      An evaluator validates that constraints are satisfied (for example: required sections appear in the decision bullets,
-      and the output stays within a max-word limit).
+    <p><strong>Step 4 — Evaluation (LLM)</strong><br/>
+      An evaluator LLM validates output against constraints: all required sections present in the
+      decision bullets, and total output within the word limit.
+      Returns a structured pass/fail with per-section feedback and word count.
     </p>
-    <p><strong>Step 5 — Revision Loop (optional)</strong><br/>
-      If evaluation fails, the system retries with fixes until it passes, reaches max retries, or hits a pipeline timeout.
+    <p><strong>Step 5 — Tool Steps (citation extraction + risk &amp; compliance flagging)</strong><br/>
+      After evaluation, three tool nodes run in sequence:
     </p>
-    <p><strong>Step 6 — Persistence</strong><br/>
-      The app stores the input, routing artifacts, each attempt, evaluation feedback, and final outputs in SQLite
-      so results remain inspectable later.
+    <ul style="margin: 0 0 12px 24px;">
+      <li><code>tool_citation</code> — extracts factual claim/quote pairs from the generated content,
+        each with character-level source offsets and a confidence score. Supports citability review.</li>
+      <li><code>tool_risk</code> — scans output for risk and compliance issues.
+        Each flag includes a severity level (low/medium/high), a category (e.g. regulatory, safety, legal),
+        the flagged text span, and a suggested fix.</li>
+      <li><code>tool_gate</code> — decides whether to persist the result or trigger another revision
+        based on gate criteria (e.g. critical risk flags, citation support count).</li>
+    </ul>
+    <p><strong>Step 6 — Revision Loop (optional)</strong><br/>
+      If evaluation fails or the gate blocks the result, the system retries generation with
+      corrective context until it passes, reaches <code>max_retries</code>, or hits the pipeline timeout.
+    </p>
+    <p><strong>Step 7 — Persistence</strong><br/>
+      All results are written to SQLite: the input document, routing artifacts, each generation attempt,
+      evaluation feedback, citation claims, risk flags, tag summaries, and final output.
+      Every field is inspectable in the UI after the job completes.
     </p>
   </div>
 
@@ -94,68 +125,134 @@
     <h3>LangGraph Orchestration</h3>
     <p>
       LangGraph is used to orchestrate the pipeline as a <strong>stateful graph</strong>.
-      Each step is modeled as a node, and edges determine when to continue, revise, or stop.
+      Each step is modeled as a node; edges determine when to continue, revise, or stop.
       This makes the workflow explicit, inspectable, and reliable under retries and timeouts.
     </p>
 
-    <p><strong>Core nodes in this app:</strong></p>
+    <p><strong>Core nodes:</strong></p>
     <ul>
-      <li><code>route_audience</code> — routes to an audience + confidence (LLM)</li>
+      <li><code>route_audience</code> — ML router (TF-IDF + LR), LLM fallback, manual override</li>
       <li><code>specialist_generate</code> — generates structured artifacts (LLM)</li>
-      <li><code>evaluate</code> — checks constraints and returns pass/fail (LLM)</li>
+      <li><code>evaluate</code> — validates constraints and returns pass/fail (LLM)</li>
+      <li><code>tool_citation</code> — extracts claim/quote pairs with source offsets and confidence</li>
+      <li><code>tool_risk</code> — flags risk and compliance content by severity and category</li>
+      <li><code>tool_gate</code> — decides whether to persist or trigger a revision</li>
       <li><code>persist_attempt</code> — writes the current attempt to the database</li>
-      <li><code>revise</code> — increments attempt count / retry bookkeeping</li>
-      <li><code>persist_results</code> — updates final job status and replaces tags/clues</li>
+      <li><code>revise</code> — increments attempt count and injects evaluator feedback</li>
+      <li><code>persist_results</code> — finalizes job status, replaces tags/clues, stores tool outputs</li>
     </ul>
 
     <p class="muted" style="margin-top: 10px;">
-      If you see multiple attempts on a record, that is the graph driving a revision loop based on evaluator feedback.
+      Multiple attempts on a record mean the graph drove a revision loop based on evaluator feedback.
     </p>
   </div>
 
   <div class="card">
     <h3>Where to See the Evidence (UI)</h3>
     <ul>
-      <li><strong>Records</strong> — your history of processed documents</li>
-      <li><strong>View Request / Job details</strong> — routing confidence, candidate audiences, reasons, attempts, evaluation output</li>
-      <li><strong>View Source</strong> — the stored input that the pipeline ran on</li>
+      <li><strong>Records</strong> — full history of processed documents with status, audience, and tag counts</li>
+      <li><strong>Job Details</strong> — routing method (ML/LLM/manual), confidence, top signals, attempt log,
+        evaluation feedback, citation claims, and risk flags per attempt</li>
+      <li><strong>View Source</strong> — the exact input text the pipeline ran on</li>
+      <li><strong>Tag Insights</strong> — aggregated intelligence across all documents (see below)</li>
     </ul>
+  </div>
+
+  <div class="card">
+    <h3>Tag Intelligence &amp; Insights
+      <span style="font-size:12px;font-weight:400;color:#e94560;margin-left:8px;vertical-align:middle;">● Evolving — Under Development</span>
+    </h3>
+    <p class="muted">
+      The <strong>Tag Insights</strong> page derives pattern intelligence from the canonical tags
+      and inferred topic domains accumulated across all processed documents.
+      It is intentionally designed as an <em>evolving, data-driven feature</em> — the more documents
+      are processed, the more meaningful the signals become.
+    </p>
+
+    <p><strong>What the Insights page shows:</strong></p>
+    <ul>
+      <li>
+        <strong>Topic Lanes (Domains)</strong> — documents are bucketed into inferred topic domains
+        (e.g. Clinical Oncology, Biomedical Research, Healthcare AI) based on which canonical tags appear.
+        Each lane links to the filtered document list for that domain.<br/>
+        <span class="muted" style="font-size:12px;">Business logic: domain assignment uses a curated keyword-to-domain indicator map in
+        <code>tag_intel.py</code>; documents are assigned to the domain whose indicator tags best match their canonical tag set.</span>
+      </li>
+      <li style="margin-top: 8px;">
+        <strong>Rising Tags</strong> — tags appearing significantly more often in the most recent 20 documents
+        compared to the prior 20, surfacing emerging topics. Requires ≥ 40 documents of history.<br/>
+        <span class="muted" style="font-size:12px;">Business logic: delta = count(recent 20) − count(prior 20); tags with delta ≥ 2 are surfaced.</span>
+      </li>
+      <li style="margin-top: 8px;">
+        <strong>Co-occurring Tag Pairs</strong> — the most frequently co-occurring tag pairs within single documents,
+        showing which concepts cluster together across the corpus.<br/>
+        <span class="muted" style="font-size:12px;">Business logic: counts unordered (tag_a, tag_b) pairs from canonical tag lists stored per job in <code>DocumentTagSummary</code>.</span>
+      </li>
+      <li style="margin-top: 8px;">
+        <strong>Bridge Tags (Cross-Domain)</strong> — tags that appear in documents spanning multiple distinct domains,
+        identifying concepts that cross topic boundaries.<br/>
+        <span class="muted" style="font-size:12px;">Business logic: a tag is a bridge tag if its associated documents span ≥ 2 different inferred domains.</span>
+      </li>
+    </ul>
+
+    <p style="margin-top: 12px;"><strong>Tag normalization (Tag Alias Manager):</strong><br/>
+      Before any aggregation, raw LLM-generated tags are normalized to canonical forms via an alias map.
+      Examples: <em>genai</em> → <em>generative ai</em>, <em>rct</em> → <em>clinical trial</em>,
+      <em>u.s. fda approval</em> → <em>fda approval</em>.
+      Built-in defaults live in <code>tag_intel.py</code>; database entries managed via the
+      <strong>Tag Aliases</strong> page override them at runtime.
+      This normalization is what makes cross-document tag aggregation reliable.
+    </p>
+
+    <p class="muted" style="margin-top: 12px; border-left: 3px solid #e94560; padding-left: 12px;">
+      <strong>Note:</strong> Tag intelligence is an evolving feature under active development.
+      Domain indicators, rising-tag thresholds, co-occurrence logic, and bridge-tag detection
+      are all working implementations, but are expected to be refined as the corpus grows and
+      business requirements around topic taxonomy become clearer.
+      The alias map in particular is expected to expand as new documents surface noisy or variant tag forms.
+    </p>
   </div>
 
   <div class="card">
     <h3>Architecture at a Glance</h3>
     <ul>
-      <li><strong>Web:</strong> FastAPI + Jinja templates</li>
-      <li><strong>Orchestration:</strong> LangGraph (nodes + edges + state + retries/timeouts)</li>
-      <li><strong>LLM:</strong> OpenAI Responses API client (multiple calls per job: route/generate/evaluate)</li>
+      <li><strong>Web:</strong> FastAPI + Jinja2 templates</li>
+      <li><strong>Orchestration:</strong> LangGraph (stateful graph — nodes, edges, retries, timeouts)</li>
+      <li><strong>ML routing:</strong> scikit-learn TF-IDF + Logistic Regression (ML-first, LLM fallback)</li>
+      <li><strong>LLM:</strong> OpenAI Responses API — generation, evaluation, LLM routing fallback</li>
+      <li><strong>Tool nodes:</strong> citation extraction, risk &amp; compliance flagging, quality gate</li>
+      <li><strong>Tag intelligence:</strong> domain inference, rising tags, co-occurrence, bridge tags, alias normalization</li>
       <li><strong>Tracing:</strong> optional request-level tracing for node/LLM visibility</li>
-      <li><strong>Persistence:</strong> SQLite (documents, jobs, attempts, tags, clues)</li>
+      <li><strong>Persistence:</strong> SQLite — documents, jobs, attempts, tags, clues, claims, risk flags, tag summaries</li>
     </ul>
 
     <p><strong>Key files:</strong></p>
     <ul>
-      <li><code>app/main.py</code> — routes/handlers and UI flow</li>
-      <li><code>app/config.py</code> — loads/validates agent profiles and defaults</li>
-      <li><code>app/models.py</code> — data model (traceability tables)</li>
-      <li><code>app/db.py</code> — SQLite init + schema/index setup</li>
+      <li><code>app/main.py</code> — routes, handlers, UI flow</li>
+      <li><code>app/graph.py</code> — LangGraph pipeline (nodes, edges, state, retries, timeouts)</li>
+      <li><code>app/ml_router.py</code> — ML router (lazy load, predict, top-feature signals)</li>
+      <li><code>app/train_router.py</code> — CLI training script (query DB → train → save artifacts)</li>
+      <li><code>app/tools.py</code> — tool node implementations (citation, risk, gate)</li>
+      <li><code>app/tag_intel.py</code> — tag normalization, domain inference, insights logic</li>
       <li><code>app/llm.py</code> — LLM calls, parsing, timeouts, mock mode, tracing hooks</li>
-      <li><code>app/graph.py</code> — LangGraph pipeline (nodes/edges/state, retries/timeouts)</li>
-      <li><code>app/agent_profiles.yaml</code> — prompts, routing threshold, required sections, max words</li>
-      <li><code>graph.md</code> — pipeline diagram</li>
+      <li><code>app/config.py</code> — loads and validates agent profiles and routing config</li>
+      <li><code>app/models.py</code> — data model (all traceability tables)</li>
+      <li><code>app/db.py</code> — SQLite init, schema migrations, index setup</li>
+      <li><code>app/agent_profiles.yaml</code> — prompts, routing thresholds, required sections, max words</li>
     </ul>
   </div>
 
   <div class="card">
-    <h3>Safety & Limits</h3>
+    <h3>Safety &amp; Limits</h3>
     <ul>
-      <li><strong>Input limit:</strong> a maximum size is enforced for both pasted text and URL fetch results</li>
+      <li><strong>Input limit:</strong> maximum size enforced for both pasted text and URL fetch results</li>
       <li><strong>URL safety:</strong> SSRF protections (blocks private/local network targets) + redirect limits</li>
-      <li><strong>Rate limiting:</strong> simple per-IP limit to reduce abuse</li>
+      <li><strong>Rate limiting:</strong> per-IP limit to reduce abuse</li>
     </ul>
   </div>
 
   <div class="card">
-    <h3>Source Code & Deployment (Optional)</h3>
+    <h3>Source Code &amp; Deployment</h3>
     <p class="muted">
       The project is containerized and published as an image, built via CI on merges, and served from a Linux VPS.
       If you're reviewing this as part of an engineering evaluation, the repository includes Docker + CI/CD + deployment notes.

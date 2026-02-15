@@ -391,11 +391,6 @@
         border-radius: 8px;
         max-width: 92vw;
       }
-      #zoom-stage {
-        align-items: flex-start;
-        padding-top: 68px;
-        overflow-y: auto;
-      }
     }
 
     /* ── Mobile ──────────────────────────────────────────── */
@@ -435,8 +430,8 @@
       /* Zoom button always visible on mobile (no hover) */
       .zoom-btn        { opacity: 1 !important; font-size: 11px; padding: 3px 8px; }
 
-      /* Zoom modal: full-screen, SVG scrollable inside */
-      #zoom-stage      { align-items: flex-start; padding-top: 64px; }
+      /* Zoom modal: overflow hidden so touch pan isn't hijacked by native scroll */
+      #zoom-stage      { align-items: center; padding-top: 0; overflow: hidden; }
       #zoom-content    { padding: 14px; max-width: 95vw; border-radius: 8px; overflow: hidden; }
 
       /* Table horizontal scroll */
@@ -502,25 +497,78 @@
           <div class="section-header">
             <span class="num">01</span>
             <h2>LangGraph Pipeline</h2>
-            <span class="src">graph.md</span>
+            <span class="src">graph_v2.md</span>
           </div>
           <div class="section-body">
-            <h3>Node flow</h3>
+            <h3>Node flow — v3 ML-first routing with tool steps</h3>
             <div class="diagram-box">
               <div class="mermaid">
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 40, "rankSpacing": 50}, "themeVariables": {"fontFamily": "Inter, ui-sans-serif, system-ui", "fontSize": "12px"}}}%%
 flowchart TD
-  route_audience[route_audience] --> specialist_generate[specialist_generate]
+  subgraph Routing
+    route_source{ML model available?}
+    ml_router[ml_router]
+    llm_router[llm_router]
+    route_audience[route_audience]
+  end
+  subgraph Generation
+    specialist_generate[specialist_generate]
+    evaluate[evaluate]
+  end
+  subgraph Tools
+    tool_citation[tool_citation]
+    tool_risk[tool_risk]
+    tool_gate[tool_gate]
+  end
+  subgraph Persistence
+    persist_attempt[persist_attempt]
+    decision{pass?}
+    revise[revise]
+    persist_results[persist_results]
+  end
+  route_source -->|yes| ml_router
+  route_source -->|no| llm_router
+  ml_router --> route_audience
+  llm_router --> route_audience
+  route_audience --> specialist_generate
   specialist_generate --> evaluate
-  evaluate --> persist_attempt
-  persist_attempt -->|revise| revise
-  persist_attempt -->|persist_results| persist_results
+  evaluate --> tool_citation
+  tool_citation --> tool_risk
+  tool_risk --> tool_gate
+  tool_gate --> persist_attempt
+  persist_attempt --> decision
+  decision -->|revise| revise
+  decision -->|persist_results| persist_results
   revise --> specialist_generate
   persist_results --> END
+  classDef llm fill:#E8F1FF,stroke:#4C6FFF,stroke-width:1px,color:#1E2A5A;
+  classDef ml fill:#E7FAF7,stroke:#20B2AA,stroke-width:1px,color:#0D3B3A;
+  classDef tool fill:#FFF6E5,stroke:#F4A340,stroke-width:1px,color:#6A3B00;
+  classDef persist fill:#E9F9EE,stroke:#3CB371,stroke-width:1px,color:#114B2F;
+  classDef control fill:#F2F2F2,stroke:#888,stroke-width:1px,color:#333;
+  class route_audience,specialist_generate,evaluate llm;
+  class tool_citation,tool_risk,tool_gate tool;
+  class persist_attempt,persist_results persist;
+  class ml_router ml;
+  class llm_router llm;
+  class route_source,decision,revise control;
+  subgraph Legend
+    legend_ml[ML step]
+    legend_llm[LLM step]
+    legend_tool[Tool step]
+    legend_persist[Persistence]
+    legend_control[Decision/control]
+  end
+  class legend_ml ml;
+  class legend_llm llm;
+  class legend_tool tool;
+  class legend_persist persist;
+  class legend_control control;
               </div>
             </div>
             <p class="caption">
-              <code>route_audience</code> → <code>specialist_generate</code> → <code>evaluate</code> → <code>persist_attempt</code>
-              — branches to <code>revise</code> (retry loop) or <code>persist_results</code> (done)
+              ML router or LLM router → <code>route_audience</code> → <code>specialist_generate</code> → <code>evaluate</code>
+              → tool nodes → <code>persist_attempt</code> — branches to <code>revise</code> (retry loop) or <code>persist_results</code> (done)
             </p>
           </div>
         </div>
@@ -618,8 +666,11 @@ agent_profiles.yaml (top-level dict)
 │   └── &lt;audience_name_2&gt; ...
 │
 ├── routing (dict, required)
-│   ├── auto_router_prompt         (string, required)
-│   └── low_confidence_threshold   (number 0..1, required)
+│   ├── auto_router_prompt           (string, required)
+│   ├── low_confidence_threshold     (number 0..1, required)
+│   ├── ml_router_threshold          (number 0..1, optional)
+│   ├── ml_router_margin             (number 0..1, optional)
+│   └── ml_router_min_samples        (int &gt;= 1, optional)
 │
 ├── evaluation (dict, required)
 │   └── evaluator_prompt   (string, required)
@@ -628,6 +679,7 @@ agent_profiles.yaml (top-level dict)
     └── prompt   (string, required)</pre>
             <p class="caption">
               All top-level keys are required. <code>audiences</code> must contain at least one named entry.
+              The <code>routing</code> section supports optional <code>ml_router_*</code> keys for the ML-first routing path.
             </p>
           </div>
         </div>
@@ -648,7 +700,7 @@ agent_profiles.yaml (top-level dict)
           <div class="section-header">
             <span class="num">01</span>
             <h2>Entity Relationship Diagram</h2>
-            <span class="src">db_schema_visual.md</span>
+            <span class="src">db_schema_visual_v2.md</span>
           </div>
           <div class="section-body">
             <h3>PK = Primary Key &nbsp;|&nbsp; FK = Foreign Key</h3>
@@ -656,60 +708,104 @@ agent_profiles.yaml (top-level dict)
               <div class="mermaid">
 erDiagram
     Document {
-        int      id           PK
-        text     content
-        text     source_type
+        int     id          PK
+        text    content
+        text    source_type
+        text    source_url
         datetime created_at
     }
     Job {
-        int      id                       PK
-        int      document_id              FK
-        text     selected_audience
-        text     audience
-        float    routing_confidence
-        text     routing_candidates_json
-        text     routing_reasons_json
-        text     status
-        int      attempt_count
-        int      max_words
-        int      max_retries
+        int     id                      PK
+        int     document_id             FK
+        text    selected_audience
+        text    audience
+        float   routing_confidence
+        text    routing_candidates_json
+        text    routing_reasons_json
+        text    routing_source
+        text    router_version
+        text    status
+        int     attempt_count
+        int     max_words
+        int     max_retries
         datetime created_at
     }
     JobAttempt {
-        int      id                           PK
-        int      job_id                       FK
-        int      attempt_no
-        text     audience
-        text     agent_used
-        text     generated_one_line_summary
-        text     generated_tags_json
-        text     generated_clues_json
-        text     generated_bullets_json
-        text     generated_mindmap
-        text     evaluator_json
-        bool     passed
+        int     id                          PK
+        int     job_id                      FK
+        int     attempt_no
+        text    audience
+        text    agent_used
+        text    generated_one_line_summary
+        text    generated_tags_json
+        text    generated_clues_json
+        text    generated_bullets_json
+        text    generated_mindmap
+        text    evaluator_json
+        bool    passed
         datetime created_at
     }
     Tag {
-        int  id    PK
-        text name
+        int     id      PK
+        text    name
     }
     DocumentTag {
-        int  document_id  PK
-        int  tag_id       PK
+        int     document_id     PK
+        int     tag_id          PK
     }
     DocumentClue {
-        int      id           PK
-        int      document_id  FK
-        text     clue_text
+        int     id          PK
+        int     document_id FK
+        text    clue_text
+        datetime created_at
+    }
+    TagAlias {
+        int     id          PK
+        text    alias
+        text    canonical
+        datetime created_at
+    }
+    DocumentTagSummary {
+        int     id          PK
+        int     document_id FK
+        int     job_id      FK
+        text    domain
+        text    canonical_tags_json
+        datetime created_at
+    }
+    DocumentClaim {
+        int     id          PK
+        int     document_id FK
+        int     job_id      FK
+        text    claim_text
+        text    quote_text
+        int     source_start
+        int     source_end
+        float   confidence
+        datetime created_at
+    }
+    DocumentRiskFlag {
+        int     id          PK
+        int     document_id FK
+        int     job_id      FK
+        text    severity
+        text    category
+        text    text_span
+        text    suggested_fix
         datetime created_at
     }
 
-    Document    ||--o{ Job          : "has"
-    Job         ||--o{ JobAttempt   : "has"
-    Document    ||--o{ DocumentClue : "has"
-    DocumentTag }o--|| Document     : ""
-    DocumentTag }o--|| Tag          : ""
+    Document  ||--o{  Job                : "has"
+    Job       ||--o{  JobAttempt         : "has"
+    Document  ||--o{  DocumentClue       : "has"
+    DocumentTag }o--|| Document          : ""
+    DocumentTag }o--|| Tag               : ""
+    Document  ||--o{  DocumentTagSummary : "summaries"
+    Job       ||--o{  DocumentTagSummary : "summaries"
+    Document  ||--o{  DocumentClaim      : "citations"
+    Job       ||--o{  DocumentClaim      : "citations"
+    Document  ||--o{  DocumentRiskFlag   : "risk flags"
+    Job       ||--o{  DocumentRiskFlag   : "risk flags"
               </div>
             </div>
           </div>
@@ -720,7 +816,7 @@ erDiagram
           <div class="section-header">
             <span class="num">02</span>
             <h2>Table &amp; Relationship Tree</h2>
-            <span class="src">db_schema_visual.md</span>
+            <span class="src">db_schema_visual_v2.md</span>
           </div>
           <div class="section-body">
             <h3>Full column &amp; FK reference</h3>
@@ -731,6 +827,7 @@ Tables &amp; Relationships
 │   ├── id (PK)
 │   ├── content
 │   ├── source_type
+│   ├── source_url
 │   └── created_at
 │       │
 │       ├──&lt; Job                One document → many jobs
@@ -741,6 +838,8 @@ Tables &amp; Relationships
 │       │     ├── routing_confidence
 │       │     ├── routing_candidates_json
 │       │     ├── routing_reasons_json
+│       │     ├── routing_source
+│       │     ├── router_version
 │       │     ├── status
 │       │     ├── attempt_count
 │       │     ├── max_words
@@ -768,13 +867,48 @@ Tables &amp; Relationships
 │       │     ├── clue_text
 │       │     └── created_at
 │       │
-│       └──&lt; DocumentTag        Join table (many-to-many with Tag)
+│       ├──&lt; DocumentTagSummary  One document → many tag summaries
+│       │     ├── id (PK)
+│       │     ├── document_id (FK → Document.id)  [indexed]
+│       │     ├── job_id (FK → Job.id)            [indexed]
+│       │     ├── domain                          [indexed]
+│       │     ├── canonical_tags_json
+│       │     └── created_at
+│       │
+│       ├──&lt; DocumentClaim       One document → many citation claims
+│       │     ├── id (PK)
+│       │     ├── document_id (FK → Document.id)  [indexed]
+│       │     ├── job_id (FK → Job.id)            [indexed]
+│       │     ├── claim_text
+│       │     ├── quote_text
+│       │     ├── source_start
+│       │     ├── source_end
+│       │     ├── confidence
+│       │     └── created_at
+│       │
+│       ├──&lt; DocumentRiskFlag    One document → many risk flags
+│       │     ├── id (PK)
+│       │     ├── document_id (FK → Document.id)  [indexed]
+│       │     ├── job_id (FK → Job.id)            [indexed]
+│       │     ├── severity
+│       │     ├── category
+│       │     ├── text_span
+│       │     ├── suggested_fix
+│       │     └── created_at
+│       │
+│       └──&lt; DocumentTag        Join table (many-to-many)
 │             ├── document_id (PK, FK → Document.id)  [indexed]
-│             └── tag_id      (PK, FK → Tag.id)       [indexed]
+│             └── tag_id (PK, FK → Tag.id)            [indexed]
 │
-└── Tag                         Global tag registry
-      ├── id (PK)
-      └── name  [unique, indexed]</pre>
+├── Tag                         Global tag registry
+│   ├── id (PK)
+│   └── name  [unique, indexed]
+│
+└── TagAlias                    Tag normalization map
+    ├── id (PK)
+    ├── alias     [unique, indexed]
+    ├── canonical [indexed]
+    └── created_at</pre>
             <p class="caption">└──&lt; denotes a one-to-many relationship from parent to child</p>
           </div>
         </div>
@@ -784,7 +918,7 @@ Tables &amp; Relationships
           <div class="section-header">
             <span class="num">03</span>
             <h2>Indexes</h2>
-            <span class="src">db_schema_visual.md</span>
+            <span class="src">db_schema_visual_v2.md</span>
           </div>
           <div class="section-body">
             <h3>All DB indexes and their purpose</h3>
@@ -794,16 +928,26 @@ Tables &amp; Relationships
                   <th>Index Name</th>
                   <th>Table</th>
                   <th>Column(s)</th>
-                  <th>Purpose</th>
+                  <th>Notes</th>
                 </tr>
               </thead>
               <tbody>
-                <tr><td><code>ix_job_document_id</code></td>          <td>job</td>          <td>document_id</td> <td>FK lookup — find jobs for a document</td></tr>
-                <tr><td><code>ix_jobattempt_job_id</code></td>        <td>jobattempt</td>   <td>job_id</td>      <td>FK lookup — find attempts for a job</td></tr>
-                <tr><td><code>ix_documentclue_document_id</code></td> <td>documentclue</td> <td>document_id</td> <td>FK lookup — find clues for a document</td></tr>
-                <tr><td><code>ix_documenttag_document_id</code></td>  <td>documenttag</td>  <td>document_id</td> <td>FK lookup — find tags for a document</td></tr>
-                <tr><td><code>ix_documenttag_tag_id</code></td>       <td>documenttag</td>  <td>tag_id</td>      <td>FK lookup — find documents with a tag</td></tr>
-                <tr><td><em>(auto — unique)</em></td>                 <td>tag</td>          <td>name</td>        <td>Enforce uniqueness &amp; fast name lookup</td></tr>
+                <tr><td><code>ix_job_document_id</code></td>            <td>job</td>                <td>document_id</td> <td>FK lookup</td></tr>
+                <tr><td><code>ix_jobattempt_job_id</code></td>          <td>jobattempt</td>         <td>job_id</td>      <td>FK lookup</td></tr>
+                <tr><td><code>ix_documentclue_document_id</code></td>   <td>documentclue</td>       <td>document_id</td> <td>FK lookup</td></tr>
+                <tr><td><code>ix_documenttag_document_id</code></td>    <td>documenttag</td>        <td>document_id</td> <td>FK lookup</td></tr>
+                <tr><td><code>ix_documenttag_tag_id</code></td>         <td>documenttag</td>        <td>tag_id</td>      <td>FK lookup</td></tr>
+                <tr><td><code>ix_tagalias_alias</code></td>             <td>tagalias</td>           <td>alias</td>       <td>FK lookup</td></tr>
+                <tr><td><code>ix_tagalias_canonical</code></td>         <td>tagalias</td>           <td>canonical</td>   <td>FK lookup</td></tr>
+                <tr><td><code>ix_doc_tag_summary_doc</code></td>        <td>documenttagsummary</td> <td>document_id</td> <td>FK lookup</td></tr>
+                <tr><td><code>ix_doc_tag_summary_job</code></td>        <td>documenttagsummary</td> <td>job_id</td>      <td>FK lookup</td></tr>
+                <tr><td><code>ix_doc_tag_summary_domain</code></td>     <td>documenttagsummary</td> <td>domain</td>      <td>Filter/sort</td></tr>
+                <tr><td><code>ix_doc_claim_doc</code></td>              <td>documentclaim</td>      <td>document_id</td> <td>FK lookup</td></tr>
+                <tr><td><code>ix_doc_claim_job</code></td>              <td>documentclaim</td>      <td>job_id</td>      <td>FK lookup</td></tr>
+                <tr><td><code>ix_doc_risk_doc</code></td>               <td>documentriskflag</td>   <td>document_id</td> <td>FK lookup</td></tr>
+                <tr><td><code>ix_doc_risk_job</code></td>               <td>documentriskflag</td>   <td>job_id</td>      <td>FK lookup</td></tr>
+                <tr><td><em>(auto)</em></td>                            <td>tag</td>                <td>name</td>        <td>unique constraint</td></tr>
+                <tr><td><em>(auto)</em></td>                            <td>tagalias</td>           <td>alias</td>       <td>unique constraint</td></tr>
               </tbody>
             </table>
           </div>
@@ -814,20 +958,20 @@ Tables &amp; Relationships
           <div class="section-header">
             <span class="num">04</span>
             <h2>Job Status Flow</h2>
-            <span class="src">db_schema_visual.md</span>
+            <span class="src">db_schema_visual_v2.md</span>
           </div>
           <div class="section-body">
-            <h3>Lifecycle: pending → running → done / failed</h3>
+            <h3>Lifecycle: pending → running → completed / failed</h3>
             <div class="diagram-box">
               <div class="mermaid">
 stateDiagram-v2
     [*] --> pending
     pending --> running
-    running --> done
+    running --> completed
     running --> failed
     failed --> running : retry (attempt_count &lt; max_retries)
     failed --> [*]
-    done --> [*]
+    completed --> [*]
               </div>
             </div>
             <p class="caption">
@@ -1092,6 +1236,41 @@ stateDiagram-v2
         applyTransform(false);
       });
       window.addEventListener("mouseup", () => { dragging = false; stage.classList.remove("dragging"); });
+
+      // Touch pan (single finger) — blocks native scroll so the diagram pans instead
+      let touchMoved = false;
+
+      stage.addEventListener("touchstart", e => {
+        if (e.touches.length === 1) {
+          dragging = true;
+          touchMoved = false;
+          dragStart = { x: e.touches[0].clientX - panX, y: e.touches[0].clientY - panY };
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      stage.addEventListener("touchmove", e => {
+        if (!dragging || e.touches.length !== 1) return;
+        touchMoved = true;
+        panX = e.touches[0].clientX - dragStart.x;
+        panY = e.touches[0].clientY - dragStart.y;
+        applyTransform(false);
+        e.preventDefault();
+      }, { passive: false });
+
+      // On tap (no movement): close if touch landed outside the white content box
+      stage.addEventListener("touchend", e => {
+        dragging = false;
+        if (!touchMoved) {
+          const t = e.changedTouches[0];
+          const target = document.elementFromPoint(t.clientX, t.clientY);
+          const toolbar = document.querySelector(".zoom-toolbar");
+          if (target && !content.contains(target) && !(toolbar && toolbar.contains(target))) {
+            closeZoom();
+          }
+        }
+        touchMoved = false;
+      });
 
       // Keyboard: Escape / +/-
       window.addEventListener("keydown", e => {

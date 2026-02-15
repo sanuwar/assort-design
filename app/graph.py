@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import threading
 import time
 from typing import Any, Dict, List
 
 from langgraph.graph import END, StateGraph
 from sqlalchemy import text
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import Session, delete, select
 
 from app.config import (
@@ -30,6 +33,67 @@ from app.models import (
 )
 from app.tag_intel import persist_tag_summary
 from app.tools import citation_finder, count_supported_citations, risk_checker
+
+logger = logging.getLogger(__name__)
+
+# ── Auto-retrain settings ──────────────────────────────────────────────────
+_RETRAIN_EVERY_N_JOBS = int(os.getenv("RETRAIN_EVERY_N_JOBS", "20"))
+_retrain_lock = threading.Lock()
+
+
+def _maybe_retrain(session: Session) -> None:
+    """Retrain the ML router if enough new completed jobs have accumulated
+    since the last training run.  Runs in-process but is guarded by a lock
+    so concurrent requests don't trigger duplicate training."""
+    if _RETRAIN_EVERY_N_JOBS <= 0:
+        return
+
+    # How many completed specialist jobs exist in total?
+    total_completed = session.exec(
+        select(Job)
+        .where(Job.status == "completed")
+        .where(Job.audience.in_(["commercial", "medical_affairs", "r_and_d"]))  # type: ignore[union-attr]
+    ).all()
+    n_completed = len(total_completed)
+
+    # Read the last training size from metadata.json
+    from app.ml_router import ARTIFACTS_DIR
+
+    metadata_file = ARTIFACTS_DIR / "metadata.json"
+    last_n = 0
+    if metadata_file.exists():
+        try:
+            with metadata_file.open("r", encoding="utf-8") as f:
+                last_n = json.load(f).get("n_docs", 0)
+        except Exception:
+            pass
+
+    new_since_training = n_completed - last_n
+    if new_since_training < _RETRAIN_EVERY_N_JOBS:
+        return
+
+    # Guard against concurrent retrains
+    if not _retrain_lock.acquire(blocking=False):
+        return
+    try:
+        logger.info(
+            "Auto-retrain triggered: %d new completed jobs since last training (%d total).",
+            new_since_training,
+            n_completed,
+        )
+        from app.train_router import train_model
+
+        result = train_model(min_samples=10)
+        if result:
+            _ml_router.reload()
+            logger.info("Auto-retrain complete. Model reloaded. n_docs=%d", result["n_docs"])
+        else:
+            logger.info("Auto-retrain skipped (not enough labelled samples).")
+    except Exception:
+        logger.exception("Auto-retrain failed — app continues with previous model.")
+    finally:
+        _retrain_lock.release()
+
 
 def _get_pipeline_timeout() -> int:
     value = os.getenv("PIPELINE_TIMEOUT_SEC", "120")
@@ -116,6 +180,8 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
             job.routing_reasons_json = json.dumps(["Manual override"])
             job.routing_source = "manual"
             job.router_version = None
+            flag_modified(job, "routing_source")
+            flag_modified(job, "router_version")
         else:
             ml_cfg = get_ml_router_config()
             threshold = ml_cfg["ml_router_threshold"]
@@ -168,6 +234,8 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
             job.routing_reasons_json = json.dumps(reasons[:5])
             job.routing_source = routing_source
             job.router_version = ml_result["router_version"] if ml_result else None
+            flag_modified(job, "routing_source")
+            flag_modified(job, "router_version")
 
         try:
             profile = get_audience_profile(audience)
@@ -461,6 +529,14 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
         raise
 
     session.refresh(job)
+
+    # Check if we should retrain the ML router (every N completed jobs)
+    if job.status == "completed":
+        try:
+            _maybe_retrain(session)
+        except Exception:
+            logger.exception("Auto-retrain check failed — non-fatal, continuing.")
+
     return job
 
 
@@ -473,6 +549,9 @@ def build_graph_for_visualization() -> Any:
         return "persist_results"
 
     return _build_graph(
+        _noop,
+        _noop,
+        _noop,
         _noop,
         _noop,
         _noop,
@@ -506,14 +585,69 @@ def render_graph_mermaid() -> str:
 def _fallback_mermaid() -> str:
     return "\n".join(
         [
+            "%%{init: {\"flowchart\": {\"curve\": \"basis\", \"nodeSpacing\": 24, \"rankSpacing\": 30}, \"themeVariables\": {\"fontFamily\": \"Inter, ui-sans-serif, system-ui\", \"fontSize\": \"12px\"}}}%%",
             "flowchart TD",
-            "  route_audience[route_audience] --> specialist_generate[specialist_generate]",
+            "  subgraph Routing[Routing]",
+            "    route_source{[?] ML model available?}",
+            "    ml_router[[ML Router]]",
+            "    llm_router[[LLM Router]]",
+            "    route_audience[[Audience Router]]",
+            "  end",
+            "  subgraph Generation[Generation]",
+            "    specialist_generate[[Generate Artifacts]]",
+            "    evaluate[[Evaluate Output]]",
+            "  end",
+            "  subgraph Tools[Tools]",
+            "    tool_citation[[[Citations Tool]]]",
+            "    tool_risk[[[Risk Checker]]]",
+            "    tool_gate[[[Quality Gate]]]",
+            "  end",
+            "  subgraph Persistence[Persistence]",
+            "    persist_attempt[[Persist Attempt]]",
+            "    decision{[?] pass?}",
+            "    revise[[Revise]]",
+            "    persist_results[[Persist Results]]",
+            "  end",
+            "  route_source -->|yes| ml_router",
+            "  route_source -->|no| llm_router",
+            "  ml_router --> route_audience",
+            "  llm_router --> route_audience",
+            "  route_audience --> specialist_generate",
             "  specialist_generate --> evaluate",
-            "  evaluate --> persist_attempt",
-            "  persist_attempt -->|revise| revise",
-            "  persist_attempt -->|persist_results| persist_results",
+            "  evaluate --> tool_citation",
+            "  tool_citation --> tool_risk",
+            "  tool_risk --> tool_gate",
+            "  tool_gate --> persist_attempt",
+            "  persist_attempt --> decision",
+            "  decision -->|revise| revise",
+            "  decision -->|persist_results| persist_results",
             "  revise --> specialist_generate",
             "  persist_results --> END",
+            "  classDef llm fill:#E8F1FF,stroke:#4C6FFF,stroke-width:1px,color:#1E2A5A;",
+            "  classDef ml fill:#E7FAF7,stroke:#20B2AA,stroke-width:1px,color:#0D3B3A;",
+            "  classDef tool fill:#FFF6E5,stroke:#F4A340,stroke-width:1px,color:#6A3B00;",
+            "  classDef persist fill:#E9F9EE,stroke:#3CB371,stroke-width:1px,color:#114B2F;",
+            "  classDef control fill:#F2F2F2,stroke:#888,stroke-width:1px,color:#333;",
+            "  classDef group fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1px,color:#1F2937;",
+            "  class route_audience,specialist_generate,evaluate llm;",
+            "  class tool_citation,tool_risk,tool_gate tool;",
+            "  class persist_attempt,persist_results persist;",
+            "  class ml_router ml;",
+            "  class llm_router llm;",
+            "  class route_source,decision,revise control;",
+            "  class Routing,Generation,Tools,Persistence group;",
+            "  subgraph Legend[Legend]",
+            "    legend_ml[[ML step]]",
+            "    legend_llm[[LLM step]]",
+            "    legend_tool[[Tool step]]",
+            "    legend_persist[[Persistence]]",
+            "    legend_control[[Decision/control]]",
+            "  end",
+            "  class legend_ml ml;",
+            "  class legend_llm llm;",
+            "  class legend_tool tool;",
+            "  class legend_persist persist;",
+            "  class legend_control control;",
         ]
     )
 

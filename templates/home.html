@@ -393,23 +393,54 @@
         <p class="muted">No documents yet.</p>
       {% endif %}
     </div>
-    <div class="card route-totals-card">
-      <h3>Route Totals</h3>
-      <ul class="route-list">
-        {% for aud in audiences %}
-          <li>
-            <a class="route-row" href="/web/documents?audience={{ aud }}">
-              <span
-                class="route-name{% if audience_display.get(aud, aud) == 'Cross-Functional' %} tooltip{% endif %}"
-                {% if audience_display.get(aud, aud) == 'Cross-Functional' %}
-                  data-tip="Mixed stakeholders (see request for details)"
-                {% endif %}
-              >{{ audience_display.get(aud, aud) }}</span>
-              <span class="route-count">{{ route_counts.get(aud, 0) }}</span>
-            </a>
-          </li>
-        {% endfor %}
-      </ul>
+    <div class="right-col">
+      <div class="card route-totals-card">
+        <h3>Route Totals</h3>
+        <ul class="route-list">
+          {% for aud in audiences %}
+            <li>
+              <a class="route-row" href="/web/documents?audience={{ aud }}">
+                <span
+                  class="route-name{% if audience_display.get(aud, aud) == 'Cross-Functional' %} tooltip{% endif %}"
+                  {% if audience_display.get(aud, aud) == 'Cross-Functional' %}
+                    data-tip="Mixed stakeholders (see request for details)"
+                  {% endif %}
+                >{{ audience_display.get(aud, aud) }}</span>
+                <span class="route-count">{{ route_counts.get(aud, 0) }}</span>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="card tag-table-card">
+        <h3>Top Tags</h3>
+        {% if top_tags %}
+          <ul class="route-list">
+            {% for t in top_tags %}
+              <li>
+                <span class="route-row">
+                  <span class="route-name">{{ t.name }}</span>
+                  <span class="route-count">{{ t.count }}</span>
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="muted">No tags yet.</p>
+        {% endif %}
+      </div>
+      <div class="card tag-table-card">
+        <h3>Recent Tags</h3>
+        {% if recent_tags %}
+          <div class="tag-chips">
+            {% for t in recent_tags %}
+              <span class="tag-chip">{{ t }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted">No tags yet.</p>
+        {% endif %}
+      </div>
     </div>
   </div>
 
@@ -418,7 +449,28 @@
       display: grid;
       grid-template-columns: 2fr 1fr;
       gap: 18px;
-      align-items: start;
+    }
+    .right-col {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-height: 100%;
+    }
+    .tag-table-card { flex: 1; }
+    .tag-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 4px 0;
+    }
+    .tag-chip {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      background: rgba(15,52,96,0.07);
+      border: 1px solid rgba(15,52,96,0.15);
+      padding: 4px 12px;
+      border-radius: 999px;
     }
     @media (max-width: 700px) {
       .home-bottom-row { grid-template-columns: 1fr; }

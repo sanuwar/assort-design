@@ -19,7 +19,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlmodel import select
+from sqlmodel import col, func, select
 
 from app.config import get_audience_profile
 from app.db import get_session, init_db
@@ -173,12 +173,39 @@ def _build_home_context(selected_audience: Optional[str]) -> dict:
     if total_jobs:
         success_rate = round((total_completed / total_jobs) * 100)
 
+    # Tag data for homepage cards
+    top_tags: list[dict] = []
+    recent_tags: list[str] = []
+    with get_session() as session:
+        # Top tags by occurrence count
+        rows = session.exec(
+            select(Tag.name, func.count(DocumentTag.tag_id).label("cnt"))
+            .join(DocumentTag, Tag.id == DocumentTag.tag_id)
+            .group_by(DocumentTag.tag_id)
+            .order_by(func.count(DocumentTag.tag_id).desc())
+            .limit(8)
+        ).all()
+        top_tags = [{"name": r[0], "count": r[1]} for r in rows]
+
+        # Recent tags from the latest documents
+        recent_rows = session.exec(
+            select(Tag.name)
+            .join(DocumentTag, Tag.id == DocumentTag.tag_id)
+            .join(Document, Document.id == DocumentTag.document_id)
+            .distinct()
+            .order_by(Document.created_at.desc())
+            .limit(8)
+        ).all()
+        recent_tags = [r for r in recent_rows] if recent_rows else []
+
     return {
         "audiences": AUDIENCES,
         "audience_display": audience_display,
         "selected_audience": resolved_audience,
         "history": history,
         "route_counts": route_counts,
+        "top_tags": top_tags,
+        "recent_tags": recent_tags,
         "stats": {
             "total_docs": total_docs,
             "total_jobs": total_jobs,

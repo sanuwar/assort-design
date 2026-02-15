@@ -1,20 +1,25 @@
-
 # llm.py visual
 
 ## Flow: Check mock → (mock result) OR (OpenAI call → extract text → parse JSON) → dict
 
 ```mermaid
 flowchart TD
-  A[route_audience / generate_content / evaluate_content] --> B{is_mock_mode?}
+  A[route audience / generate content / evaluate content] --> B{mock mode}
 
-  B -- Yes --> M1[_mock_route / _mock_generate / _mock_evaluate]
-  M1 --> R1[Return deterministic JSON dict]
+  B -- Yes --> M1[mock route / mock generate / mock evaluate]
+  M1 --> R1[return deterministic json]
 
-  B -- No --> C[_call_llm_json]
-  C --> D[get_client]
-  D --> E{OPENAI_API_KEY set?}
-  E -- No --> X[RuntimeError: client not available]
-  E -- Yes --> F[OpenAI Responses API: responses.create]
-  F --> G[_extract_text]
-  G --> H[_parse_json]
-  H --> R2[Return JSON dict]
+  B -- No --> C[call llm json]
+  C --> D[get client]
+  D --> E{api key set}
+  E -- No --> X[runtime error client unavailable]
+  E -- Yes --> T[apply timeout 30s]
+  T --> W{tracing enabled}
+  W -- Yes --> W1[wrap openai client]
+  W -- No --> W2[use client]
+  W1 --> F[responses api create model openai model]
+  W2 --> F
+  F --> G[extract text]
+  G --> H[parse json]
+  H --> R2[return json dict]
+```

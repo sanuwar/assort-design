@@ -13,11 +13,19 @@ CLASSES = ["commercial", "medical_affairs", "r_and_d"]
 
 class MLRouter:
     """TF-IDF + Logistic Regression audience router loaded lazily from artifacts/."""
-
+    # load model once then reuse it
+    
     def __init__(self) -> None:
         self._pipeline = None  # sklearn Pipeline (vectorizer + classifier)
-        self._version: Optional[str] = None
+        self._version: Optional[str] = None 
         self._loaded: bool = False
+
+    def reload(self) -> bool:
+        """Drop cached model and re-load from disk.  Returns True on success."""
+        self._pipeline = None
+        self._version = None
+        self._loaded = False
+        return self.load()
 
     def load(self) -> bool:
         """Attempt to load artifacts. Returns True on success, False if missing/corrupt."""

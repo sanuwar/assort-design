@@ -1,45 +1,48 @@
 """
-CLI training script for the TF-IDF + Logistic Regression audience router.
+CLI + programmatic training for the TF-IDF + Logistic Regression audience router.
 
-Usage:
+CLI usage:
     python -m app.train_router [--min-samples N] [--output-dir PATH]
 
-Connects to the SQLite DB, extracts completed jobs, trains a 3-way classifier,
-evaluates it, and saves artifacts to artifacts/ (default).
+Programmatic usage (from inside the running app):
+    from app.train_router import train_model
+    result = train_model(min_samples=10)   # returns dict or None
 """
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 # Ensure project root is on path when run as __main__
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
+DEFAULT_OUTPUT_DIR = _PROJECT_ROOT / "artifacts"
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Train the ML audience router.")
-    parser.add_argument(
-        "--min-samples",
-        type=int,
-        default=10,
-        help="Minimum number of labelled examples required to train (default: 10).",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default=str(_PROJECT_ROOT / "artifacts"),
-        help="Directory to save artifacts (default: artifacts/).",
-    )
-    args = parser.parse_args()
 
-    output_dir = Path(args.output_dir)
+def train_model(
+    min_samples: int = 10,
+    output_dir: Optional[Path] = None,
+    verbose: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """
+    Train the ML router from labelled jobs in the DB.
+
+    Returns a metadata dict on success, or None if there aren't enough samples.
+    Raises on unexpected errors (DB, sklearn, IO).
+    """
+    if output_dir is None:
+        output_dir = DEFAULT_OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # ── 1. Load data from DB ──────────────────────────────────────────────────
+    # ── 1. Load data from DB ────────────────────────────────────────────────
     from app.db import engine
     from sqlalchemy import text
 
@@ -67,17 +70,17 @@ def main() -> None:
             labels.append(audience)
 
     n = len(texts)
-    print(f"Found {n} labelled examples.")
+    if verbose:
+        print(f"Found {n} labelled examples.")
 
-    if n < args.min_samples:
-        print(
-            f"ERROR: Need at least {args.min_samples} samples to train "
-            f"(got {n}). Run more jobs first.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    if n < min_samples:
+        msg = f"Need at least {min_samples} samples to train (got {n})."
+        if verbose:
+            print(f"ERROR: {msg}", file=sys.stderr)
+        logger.info("train_model skipped: %s", msg)
+        return None
 
-    # ── 2. Build pipeline ─────────────────────────────────────────────────────
+    # ── 2. Build pipeline ───────────────────────────────────────────────────
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import Pipeline
@@ -98,12 +101,11 @@ def main() -> None:
                 max_iter=1000,
                 class_weight="balanced",
                 solver="lbfgs",
-                multi_class="multinomial",
             ),
         ),
     ])
 
-    # ── 3. Train / evaluate ───────────────────────────────────────────────────
+    # ── 3. Train / evaluate ─────────────────────────────────────────────────
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import (
         accuracy_score,
@@ -119,7 +121,6 @@ def main() -> None:
             texts, labels, test_size=0.2, random_state=42, stratify=stratify
         )
     else:
-        # Too few samples for a split — train on all, skip evaluation
         X_train, y_train = texts, labels
         X_test, y_test = [], []
 
@@ -131,13 +132,14 @@ def main() -> None:
     if X_test:
         y_pred = pipeline.predict(X_test)
         accuracy = float(accuracy_score(y_test, y_pred))
-        print(f"\nAccuracy: {accuracy * 100:.1f}%")
-        print("\nClassification report:")
-        print(classification_report(y_test, y_pred, labels=unique_labels))
-        print("Confusion matrix (rows=true, cols=pred):")
-        cm = confusion_matrix(y_test, y_pred, labels=unique_labels)
-        print("Labels:", unique_labels)
-        print(cm)
+        if verbose:
+            print(f"\nAccuracy: {accuracy * 100:.1f}%")
+            print("\nClassification report:")
+            print(classification_report(y_test, y_pred, labels=unique_labels))
+            print("Confusion matrix (rows=true, cols=pred):")
+            cm = confusion_matrix(y_test, y_pred, labels=unique_labels)
+            print("Labels:", unique_labels)
+            print(cm)
 
         from sklearn.metrics import precision_recall_fscore_support
         prec, rec, f1, _ = precision_recall_fscore_support(
@@ -149,10 +151,10 @@ def main() -> None:
                 "recall": round(float(rec[i]), 3),
                 "f1": round(float(f1[i]), 3),
             }
-    else:
+    elif verbose:
         print("(No test split — trained on all data, evaluation skipped.)")
 
-    # ── 4. Save artifacts ─────────────────────────────────────────────────────
+    # ── 4. Save artifacts ───────────────────────────────────────────────────
     import joblib
 
     vectorizer = pipeline.named_steps["vectorizer"]
@@ -171,11 +173,46 @@ def main() -> None:
     with (output_dir / "metadata.json").open("w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 
-    print(
-        f"\nTrained on {n} docs."
-        + (f" Accuracy: {accuracy * 100:.1f}%." if accuracy is not None else "")
-        + f" Saved to {output_dir}/"
+    if verbose:
+        print(
+            f"\nTrained on {n} docs."
+            + (f" Accuracy: {accuracy * 100:.1f}%." if accuracy is not None else "")
+            + f" Saved to {output_dir}/"
+        )
+
+    logger.info(
+        "train_model complete: %d docs, accuracy=%s, saved to %s",
+        n,
+        f"{accuracy:.1%}" if accuracy is not None else "N/A",
+        output_dir,
     )
+    return metadata
+
+
+def main() -> None:
+    """CLI entry point."""
+    parser = argparse.ArgumentParser(description="Train the ML audience router.")
+    parser.add_argument(
+        "--min-samples",
+        type=int,
+        default=10,
+        help="Minimum number of labelled examples required to train (default: 10).",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=str(DEFAULT_OUTPUT_DIR),
+        help="Directory to save artifacts (default: artifacts/).",
+    )
+    args = parser.parse_args()
+
+    result = train_model(
+        min_samples=args.min_samples,
+        output_dir=Path(args.output_dir),
+        verbose=True,
+    )
+    if result is None:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
