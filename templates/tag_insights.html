@@ -3,6 +3,11 @@
 {% block title %}Tag Insights - Assort Design{% endblock %}
 
 {% block content %}
+  <div style="display:flex;gap:6px;margin-bottom:24px;padding:5px;background:var(--bg);border:1px solid var(--card-border);border-radius:10px">
+    <a href="/web/insights/tags" style="flex:1;text-align:center;padding:10px 18px;font-size:14px;font-weight:600;color:#fff;background:var(--accent);border:1px solid var(--accent);border-radius:8px;text-decoration:none;box-shadow:0 2px 8px rgba(15,52,96,0.25)">Tag Insights</a>
+    <a href="/web/insights/ml-router" style="flex:1;text-align:center;padding:10px 18px;font-size:14px;font-weight:600;color:var(--accent);background:rgba(15,52,96,0.06);border:1px solid var(--card-border);border-radius:8px;text-decoration:none;transition:all 0.2s" onmouseover="this.style.background='rgba(15,52,96,0.12)';this.style.borderColor='var(--accent)'" onmouseout="this.style.background='rgba(15,52,96,0.06)';this.style.borderColor='var(--card-border)'">ML Router</a>
+  </div>
+
   <div class="card">
     <h2>Tag Intelligence</h2>
     <p class="muted">

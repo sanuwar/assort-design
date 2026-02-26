@@ -38,6 +38,7 @@ from app.models import (
 )
 from app.schema_version import SCHEMA_VERSION
 from app.version import APP_VERSION
+from app.ml_router import ARTIFACTS_DIR, _ml_router
 from app.tag_intel import (
     compute_bridge_tags,
     compute_cooccurrence_pairs,
@@ -499,6 +500,48 @@ def tag_insights(request: Request) -> HTMLResponse:
             "has_history": len(summaries) >= 20,
             "has_rising_history": len(summaries) >= 40,
         },
+    )
+
+
+@app.get("/web/insights/ml-router", response_class=HTMLResponse)
+def ml_router_insights(request: Request) -> HTMLResponse:
+    stats = None
+    if _ml_router.load():
+        stats = _ml_router.get_model_stats(top_n=15)
+
+    # Compute retrain countdown
+    retrain_info = None
+    retrain_every = int(os.getenv("RETRAIN_EVERY_N_JOBS", "20"))
+    if retrain_every > 0:
+        with get_session() as session:
+            n_completed = len(
+                session.exec(
+                    select(Job)
+                    .where(Job.status == "completed")
+                    .where(Job.audience.in_(["commercial", "medical_affairs", "r_and_d"]))  # type: ignore[union-attr]
+                ).all()
+            )
+        last_n = 0
+        metadata_file = ARTIFACTS_DIR / "metadata.json"
+        if metadata_file.exists():
+            try:
+                with metadata_file.open("r", encoding="utf-8") as f:
+                    last_n = json.load(f).get("n_docs", 0)
+            except Exception:
+                pass
+        new_since = n_completed - last_n
+        remaining = max(retrain_every - new_since, 0)
+        retrain_info = {
+            "total_completed": n_completed,
+            "last_trained_on": last_n,
+            "new_since": new_since,
+            "retrain_every": retrain_every,
+            "remaining": remaining,
+        }
+
+    return templates.TemplateResponse(
+        "ml_router_insights.html",
+        {"request": request, "stats": stats, "retrain_info": retrain_info},
     )
 
 
@@ -996,6 +1039,12 @@ def job_detail(request: Request, job_id: int) -> HTMLResponse:
         routing_confidence_pct = int(round(float(job.routing_confidence) * 100))
     routing_source = getattr(job, "routing_source", None)
     router_version = getattr(job, "router_version", None)
+
+    ml_explanation = None
+    if routing_source in ("ml", "ml+llm_fallback") and doc and doc.content:
+        if _ml_router.load():
+            ml_explanation = _ml_router.explain(doc.content, top_n=8)
+
     cross_functional_detail = None
     if audience_label == "Cross-Functional":
         if routing_candidates_display:
@@ -1066,6 +1115,7 @@ def job_detail(request: Request, job_id: int) -> HTMLResponse:
                 "weak": weak_count,
             },
             "related_docs": related_docs,
+            "ml_explanation": ml_explanation,
         },
     )
 

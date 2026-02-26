@@ -129,6 +129,111 @@ class MLRouter:
         except Exception:
             return []
 
+    def get_model_stats(self, top_n: int = 15) -> Optional[Dict]:
+        """Return model-level stats for the insights page."""
+        if not self._loaded or self._pipeline is None:
+            return None
+
+        vectorizer = self._pipeline.named_steps["vectorizer"]
+        classifier = self._pipeline.named_steps["classifier"]
+        feature_names = vectorizer.get_feature_names_out()
+
+        # Metadata from JSON
+        metadata_path = ARTIFACTS_DIR / "metadata.json"
+        meta: Dict = {}
+        if metadata_path.exists():
+            try:
+                with metadata_path.open("r", encoding="utf-8") as f:
+                    meta = json.load(f)
+            except Exception:
+                pass
+
+        # Top IDF terms
+        top_idf_terms: List[str] = []
+        try:
+            import numpy as np
+
+            idf = vectorizer.idf_
+            top_idf_idx = np.argsort(idf)[::-1][:20]
+            top_idf_terms = [str(feature_names[i]) for i in top_idf_idx]
+        except Exception:
+            pass
+
+        # Top positive-weight terms per class
+        cls_order: List[str] = list(classifier.classes_)
+        top_terms_per_class: Dict[str, List[Dict]] = {}
+        try:
+            for i, label in enumerate(cls_order):
+                coef = classifier.coef_[i]
+                top_idx = coef.argsort()[::-1][:top_n]
+                top_terms_per_class[label] = [
+                    {"term": str(feature_names[j]), "weight": round(float(coef[j]), 4)}
+                    for j in top_idx
+                    if coef[j] > 0
+                ]
+        except Exception:
+            pass
+
+        return {
+            "trained_at": meta.get("trained_at", "unknown"),
+            "n_docs": meta.get("n_docs", 0),
+            "accuracy": meta.get("accuracy"),
+            "labels": meta.get("labels", cls_order),
+            "per_class_metrics": meta.get("per_class_metrics", {}),
+            "vocab_size": len(feature_names),
+            "top_idf_terms": top_idf_terms,
+            "top_terms_per_class": top_terms_per_class,
+        }
+
+    def explain(self, text: str, top_n: int = 10) -> Optional[Dict]:
+        """Explain routing for a single document — per-term contributions."""
+        if not self._loaded or self._pipeline is None:
+            return None
+
+        vectorizer = self._pipeline.named_steps["vectorizer"]
+        classifier = self._pipeline.named_steps["classifier"]
+
+        X = vectorizer.transform([text])
+        proba = classifier.predict_proba(X)[0]
+        feature_names = vectorizer.get_feature_names_out()
+
+        cls_order: List[str] = list(classifier.classes_)
+        prob_map = {cls: round(float(proba[i]), 4) for i, cls in enumerate(cls_order)}
+
+        sorted_classes = sorted(prob_map.items(), key=lambda kv: kv[1], reverse=True)
+        predicted_class, predicted_prob = sorted_classes[0]
+        runner_up_class, runner_up_prob = sorted_classes[1]
+
+        def _term_contributions(class_idx: int) -> List[Dict]:
+            coef = classifier.coef_[class_idx]
+            nz_indices = X[0].nonzero()[1]
+            contributions = []
+            for j in nz_indices:
+                tfidf_val = float(X[0, j])
+                weight = float(coef[j])
+                contrib = tfidf_val * weight
+                contributions.append({
+                    "term": str(feature_names[j]),
+                    "tfidf": round(tfidf_val, 4),
+                    "weight": round(weight, 4),
+                    "contribution": round(contrib, 4),
+                })
+            contributions.sort(key=lambda c: c["contribution"], reverse=True)
+            return contributions[:top_n]
+
+        predicted_idx = cls_order.index(predicted_class)
+        runner_up_idx = cls_order.index(runner_up_class)
+
+        return {
+            "predicted_class": predicted_class,
+            "predicted_prob": predicted_prob,
+            "runner_up_class": runner_up_class,
+            "runner_up_prob": runner_up_prob,
+            "all_probs": prob_map,
+            "contributions": _term_contributions(predicted_idx),
+            "runner_up_contributions": _term_contributions(runner_up_idx),
+        }
+
 
 # Module-level singleton — loaded lazily on first use.
 _ml_router = MLRouter()
