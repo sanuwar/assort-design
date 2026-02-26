@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}ML Router Insights - Assort Design{% endblock %}
+
+{% block content %}
+  <style>
+    .insights-subnav {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 24px;
+      padding: 5px;
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+    }
+    .insights-subnav a {
+      flex: 1;
+      text-align: center;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      text-decoration: none;
+      background: rgba(15, 52, 96, 0.06);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .insights-subnav a:hover {
+      color: var(--accent);
+      background: rgba(15, 52, 96, 0.12);
+      border-color: var(--accent);
+      text-decoration: none;
+    }
+    .insights-subnav a.active {
+      color: #ffffff;
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px rgba(15, 52, 96, 0.25);
+    }
+    .weight-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 5px 0;
+    }
+    .weight-bar-term {
+      min-width: 160px;
+      text-align: right;
+      font-size: 13px;
+    }
+    .weight-bar-track {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      height: 20px;
+      overflow: hidden;
+    }
+    .weight-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+    .weight-bar-value {
+      min-width: 55px;
+      font-size: 12px;
+      color: var(--muted);
+      font-family: "IBM Plex Mono", monospace;
+    }
+    .metrics-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .metrics-table th,
+    .metrics-table td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .metrics-table th {
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--bg);
+    }
+    .idf-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      margin: 3px;
+      border-radius: 999px;
+      background: rgba(15, 52, 96, 0.08);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid rgba(15, 52, 96, 0.15);
+    }
+    @media (max-width: 720px) {
+      .weight-bar-term { min-width: 100px; font-size: 11px; }
+      .insights-subnav a { padding: 9px 10px; font-size: 12px; }
+    }
+  </style>
+
+  <!-- Sub-navigation -->
+  <div class="insights-subnav">
+    <a href="/web/insights/tags">Tag Insights</a>
+    <a href="/web/insights/ml-router" class="active">ML Router</a>
+  </div>
+
+  {% if stats %}
+
+    <!-- Model Metadata -->
+    <div class="card">
+      <h3>Model Metadata</h3>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-value">{{ stats.n_docs }}</div>
+          <div class="muted">Training Docs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">
+            {% if stats.accuracy is not none %}
+              {{ (stats.accuracy * 100) | round(1) }}%
+            {% else %}
+              N/A
+            {% endif %}
+          </div>
+          <div class="muted">Accuracy</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ stats.vocab_size | default(0) }}</div>
+          <div class="muted">Vocabulary Size</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ stats.labels | length }}</div>
+          <div class="muted">Classes</div>
+        </div>
+      </div>
+      <p class="muted" style="margin-top: 12px; font-size: 12px;">
+        Trained: {{ stats.trained_at }}<br/>
+        Labels: {{ stats.labels | join(", ") }}
+      </p>
+    </div>
+
+    <!-- Auto-Retrain Status -->
+    {% if retrain_info %}
+    <div class="card" style="border-left: 4px solid var(--accent-2);">
+      <h3>Auto-Retrain Status</h3>
+      {% if retrain_info.remaining == 0 %}
+        <p style="font-size: 14px;">
+          <strong style="color: var(--accent-2);">Retrain ready!</strong>
+          The model will retrain automatically on the next completed analysis.
+        </p>
+      {% else %}
+        <p style="font-size: 14px;">
+          <strong>{{ retrain_info.remaining }}</strong> more completed
+          {{ "analysis" if retrain_info.remaining == 1 else "analyses" }}
+          needed before the model retrains automatically.
+        </p>
+      {% endif %}
+      <p class="muted" style="font-size: 12px; margin-top: 8px;">
+        {{ retrain_info.new_since }} new since last training
+        &middot; retrain interval: every {{ retrain_info.retrain_every }} completed jobs
+        &middot; total completed: {{ retrain_info.total_completed }}
+      </p>
+      <div style="margin-top: 10px; background: var(--bg); border: 1px solid var(--card-border); border-radius: 6px; height: 10px; overflow: hidden;">
+        <div style="height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 6px; width: {{ ((retrain_info.new_since / retrain_info.retrain_every) * 100) | round }}%; transition: width 0.3s;"></div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Per-Class Metrics -->
+    {% if stats.per_class_metrics %}
+    <div class="card">
+      <h3>Per-Class Performance</h3>
+      <table class="metrics-table">
+        <thead>
+          <tr>
+            <th>Class</th>
+            <th>Precision</th>
+            <th>Recall</th>
+            <th>F1</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for label in stats.labels %}
+            {% set m = stats.per_class_metrics.get(label, {}) %}
+            <tr>
+              <td><strong>{{ label | replace("_", " ") | title }}</strong></td>
+              <td>{{ m.get("precision", "—") }}</td>
+              <td>{{ m.get("recall", "—") }}</td>
+              <td>{{ m.get("f1", "—") }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <!-- Vocabulary: Top IDF Terms -->
+    {% if stats.top_idf_terms %}
+    <div class="card">
+      <h3>Top IDF Terms</h3>
+      <p class="muted" style="margin-bottom: 10px; font-size: 13px;">
+        Terms with the highest inverse document frequency &mdash; rare but distinctive terms in the training vocabulary.
+      </p>
+      <div>
+        {% for term in stats.top_idf_terms %}
+          <span class="idf-badge">{{ term }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Top Terms per Class -->
+    {% for label in stats.labels %}
+      {% set terms = stats.top_terms_per_class.get(label, []) %}
+      {% if terms %}
+        {% set max_weight = terms[0].weight if terms else 1 %}
+        <div class="card">
+          <h3>Top Terms: {{ label | replace("_", " ") | title }}</h3>
+          <p class="muted" style="margin-bottom: 10px; font-size: 13px;">
+            Learned logistic regression weights &mdash; terms with the strongest positive signal for this audience.
+          </p>
+          {% for item in terms %}
+            <div class="weight-bar-row">
+              <code class="weight-bar-term">{{ item.term }}</code>
+              <div class="weight-bar-track">
+                <div class="weight-bar-fill" style="width: {{ (item.weight / max_weight * 100) | round }}%"></div>
+              </div>
+              <span class="weight-bar-value">{{ item.weight }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endfor %}
+
+  {% else %}
+
+    <!-- Empty state -->
+    <div class="card" style="text-align: center; padding: 40px 20px;">
+      <h3>No ML Router Artifacts Found</h3>
+      <p class="muted">
+        The ML router has not been trained yet. Train the model first:
+      </p>
+      <pre style="display: inline-block; text-align: left; margin-top: 10px;">python -m app.train_router</pre>
+      <p class="muted" style="margin-top: 12px;">
+        Once trained, this page will show the model's learned vocabulary, per-class weights, and performance metrics.
+      </p>
+      {% if retrain_info %}
+        <p class="muted" style="margin-top: 8px;">
+          {{ retrain_info.total_completed }} completed
+          {{ "analysis" if retrain_info.total_completed == 1 else "analyses" }} available for training.
+        </p>
+      {% endif %}
+    </div>
+
+  {% endif %}
+{% endblock %}

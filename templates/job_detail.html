@@ -354,6 +354,95 @@
     {% endif %}
   </div>
 
+  {# ── ML Router Explanation ─────────────────────────── #}
+  {% if ml_explanation %}
+  <div class="card">
+    <style>
+      .routed-details summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+      .routed-details summary::-webkit-details-marker { display: none !important; }
+      .routed-details summary::marker { display: none !important; content: "" !important; font-size: 0 !important; }
+      .routed-chevron { font-size: 12px; color: var(--muted); transition: transform 0.2s; display: inline-block; }
+      .routed-details[open] .routed-chevron { transform: rotate(180deg); }
+    </style>
+    <details class="routed-details">
+      <summary>
+        <h3 style="margin:0">Why Routed Here</h3>
+        <span class="muted" style="font-size:13px">
+          {{ ml_explanation.predicted_class | replace("_", " ") | title }}
+          at {{ (ml_explanation.predicted_prob * 100) | round(1) }}%
+        </span>
+        <span class="routed-chevron">&#9660;</span>
+      </summary>
+
+      <p class="muted" style="margin: 12px 0;">
+        ML predicted <strong>{{ ml_explanation.predicted_class | replace("_", " ") | title }}</strong>
+        at {{ (ml_explanation.predicted_prob * 100) | round(1) }}% confidence.
+        Runner-up: {{ ml_explanation.runner_up_class | replace("_", " ") | title }}
+        at {{ (ml_explanation.runner_up_prob * 100) | round(1) }}%.
+      </p>
+
+      <p style="font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 6px;">
+        Top contributing terms ({{ ml_explanation.predicted_class | replace("_", " ") | title }})
+      </p>
+      <table class="citation-table">
+        <thead>
+          <tr><th>Term</th><th>TF-IDF</th><th>Weight</th><th>Contribution</th><th style="width:35%"></th></tr>
+        </thead>
+        <tbody>
+          {% for c in ml_explanation.contributions %}
+          <tr>
+            <td><code>{{ c.term }}</code></td>
+            <td>{{ c.tfidf }}</td>
+            <td>{{ c.weight }}</td>
+            <td><strong>{{ c.contribution }}</strong></td>
+            <td>
+              <div style="background:var(--bg);border:1px solid var(--card-border);border-radius:4px;height:14px;overflow:hidden">
+                {% if ml_explanation.contributions[0].contribution > 0 %}
+                <div style="height:100%;width:{{ (c.contribution / ml_explanation.contributions[0].contribution * 100) | round }}%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:4px"></div>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <details style="margin-top: 14px;">
+        <summary>Runner-up: {{ ml_explanation.runner_up_class | replace("_", " ") | title }} ({{ (ml_explanation.runner_up_prob * 100) | round(1) }}%)</summary>
+        <table class="citation-table" style="margin-top: 8px;">
+          <thead>
+            <tr><th>Term</th><th>TF-IDF</th><th>Weight</th><th>Contribution</th><th style="width:35%"></th></tr>
+          </thead>
+          <tbody>
+            {% for c in ml_explanation.runner_up_contributions %}
+            <tr>
+              <td><code>{{ c.term }}</code></td>
+              <td>{{ c.tfidf }}</td>
+              <td>{{ c.weight }}</td>
+              <td><strong>{{ c.contribution }}</strong></td>
+              <td>
+                <div style="background:var(--bg);border:1px solid var(--card-border);border-radius:4px;height:14px;overflow:hidden">
+                  {% if ml_explanation.runner_up_contributions and ml_explanation.runner_up_contributions[0].contribution > 0 %}
+                  <div style="height:100%;width:{{ (c.contribution / ml_explanation.runner_up_contributions[0].contribution * 100) | round }}%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:4px"></div>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+
+      <p class="muted" style="margin-top: 12px; font-size: 11px;">
+        All probabilities:
+        {% for cls, prob in ml_explanation.all_probs.items() %}
+          {{ cls | replace("_", " ") | title }}: {{ (prob * 100) | round(1) }}%{% if not loop.last %} · {% endif %}
+        {% endfor %}
+      </p>
+    </details>
+  </div>
+  {% endif %}
+
   {# ── Running banner ───────────────────────────────── #}
   {% if job.status == "running" %}
     <div class="card status-banner">

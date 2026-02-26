@@ -108,10 +108,13 @@
       }
       .nav-links {
         display: flex;
+        align-items: center;
         gap: 4px;
         font-weight: 500;
       }
-      .nav-links a {
+      .nav-links a,
+      .nav-dropdown > span {
+        display: inline-block;
         color: rgba(255, 255, 255, 0.8);
         text-decoration: none;
         font-size: 14px;
@@ -119,10 +122,49 @@
         border-radius: 6px;
         border: 1px solid transparent;
         transition: background 0.15s, color 0.15s;
+        cursor: pointer;
       }
-      .nav-links a:hover {
+      .nav-links a:hover,
+      .nav-dropdown:hover > span {
         background: rgba(255, 255, 255, 0.12);
         color: #ffffff;
+      }
+      .nav-dropdown {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+      }
+      .nav-dropdown-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        padding-top: 6px;
+        min-width: 180px;
+        z-index: 1000;
+      }
+      .nav-dropdown-menu-inner {
+        background: #fff;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(15, 52, 96, 0.18);
+        padding: 6px 0;
+      }
+      .nav-dropdown:hover .nav-dropdown-menu {
+        display: block;
+      }
+      .nav-dropdown-menu a {
+        display: block;
+        color: var(--text) !important;
+        font-size: 13px !important;
+        padding: 8px 16px !important;
+        border-radius: 0 !important;
+        border: none !important;
+        transition: background 0.15s;
+      }
+      .nav-dropdown-menu a:hover {
+        background: rgba(15, 52, 96, 0.06) !important;
+        color: var(--accent) !important;
       }
       main {
         max-width: 1200px;
@@ -545,7 +587,9 @@
         .brand-motto { display: none; }
         .brand-home-hint { display: none; }
         .nav-links { gap: 2px; flex-wrap: wrap; }
-        .nav-links a { font-size: 12px; padding: 4px 8px; }
+        .nav-links a,
+        .nav-dropdown > span { font-size: 12px; padding: 4px 8px; }
+        .nav-dropdown-menu { min-width: 140px; }
         main   { padding: 0 18px; }
         .site-footer { padding: 14px 18px; }
       }
@@ -575,9 +619,25 @@
         </a>
         <nav class="nav-links">
           <a href="/web/documents">Records</a>
-          <a href="/web/insights/tags">Insights</a>
+          <div class="nav-dropdown">
+            <span>Insights</span>
+            <div class="nav-dropdown-menu">
+              <div class="nav-dropdown-menu-inner">
+                <a href="/web/insights/tags">Tag Insights</a>
+                <a href="/web/insights/ml-router">ML Router</a>
+              </div>
+            </div>
+          </div>
           <a href="/web/watchlist">Watchlist</a>
-          <a href="/web/about">About</a>
+          <div class="nav-dropdown">
+            <span>About</span>
+            <div class="nav-dropdown-menu" style="left:auto;right:0">
+              <div class="nav-dropdown-menu-inner">
+                <a href="/web/about#overview" data-about-tab="overview-panel">Overview</a>
+                <a href="/web/about#technical" data-about-tab="technical-panel">Technical Deep Dive</a>
+              </div>
+            </div>
+          </div>
         </nav>
       </div>
     </header>
@@ -677,6 +737,27 @@
           }
         });
       })();
+    </script>
+    <script>
+      /* About nav dropdown: switch tabs when already on the about page */
+      document.querySelectorAll('[data-about-tab]').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+          var panelId = this.getAttribute('data-about-tab');
+          var tabs = document.querySelectorAll('.about-tab');
+          var panels = document.querySelectorAll('.about-panel');
+          if (tabs.length && panels.length) {
+            e.preventDefault();
+            tabs.forEach(function(t) { t.classList.remove('active'); });
+            panels.forEach(function(p) { p.classList.remove('active'); });
+            var target = document.getElementById(panelId);
+            if (target) target.classList.add('active');
+            tabs.forEach(function(t) {
+              if (t.getAttribute('data-panel') === panelId) t.classList.add('active');
+            });
+            history.replaceState(null, '', this.getAttribute('href'));
+          }
+        });
+      });
     </script>
   </body>
 </html>
