@@ -11,7 +11,8 @@
       "Read(//c/AsortDesing/**)",
       "Bash(pip install:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(wc -l c:/AsortDesing/app/*.py c:/AsortDesing/tests/*.py)"
     ]
   }
 }

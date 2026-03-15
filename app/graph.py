@@ -8,10 +8,11 @@ import time
 from typing import Any, Dict, List
 
 from langgraph.graph import END, StateGraph
-from sqlalchemy import text
+from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 from sqlalchemy.orm.attributes import flag_modified
-from sqlmodel import Session, delete, select
+from sqlmodel import Session, delete, func, select
 
+from app.utils import env_int
 from app.config import (
     get_audience_profile,
     get_evaluation_config,
@@ -37,7 +38,7 @@ from app.tools import citation_finder, count_supported_citations, risk_checker
 logger = logging.getLogger(__name__)
 
 # ── Auto-retrain settings ──────────────────────────────────────────────────
-_RETRAIN_EVERY_N_JOBS = int(os.getenv("RETRAIN_EVERY_N_JOBS", "20"))
+_RETRAIN_EVERY_N_JOBS = env_int("RETRAIN_EVERY_N_JOBS", 20)
 _retrain_lock = threading.Lock()
 
 
@@ -49,12 +50,11 @@ def _maybe_retrain(session: Session) -> None:
         return
 
     # How many completed specialist jobs exist in total?
-    total_completed = session.exec(
-        select(Job)
+    n_completed = session.exec(
+        select(func.count(Job.id))
         .where(Job.status == "completed")
         .where(Job.audience.in_(["commercial", "medical_affairs", "r_and_d"]))  # type: ignore[union-attr]
-    ).all()
-    n_completed = len(total_completed)
+    ).one()
 
     # Read the last training size from metadata.json
     from app.ml_router import ARTIFACTS_DIR
@@ -95,15 +95,7 @@ def _maybe_retrain(session: Session) -> None:
         _retrain_lock.release()
 
 
-def _get_pipeline_timeout() -> int:
-    value = os.getenv("PIPELINE_TIMEOUT_SEC", "120")
-    try:
-        return int(value)
-    except ValueError:
-        return 120
-
-
-PIPELINE_TIMEOUT_SEC = _get_pipeline_timeout()
+PIPELINE_TIMEOUT_SEC = env_int("PIPELINE_TIMEOUT_SEC", 120)
 
 
 def _build_graph(
@@ -369,9 +361,12 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
         support_warning = supported_count < 3
         evaluation["support_warning"] = support_warning
 
-        hard_fail = False
+        # Known limitation: the hard-fail gate only triggers when there are zero
+        # supported citations.  One or two citations can still allow high-risk
+        # language to pass.  support_warning is informational only and does not
+        # affect pass/fail.  A production system should apply a tunable threshold
+        # (e.g., require supported_count >= N for documents with high-risk flags).
         if high_risks and supported_count == 0:
-            hard_fail = True
             evaluation["pass"] = False
             evaluation["fail_reasons"] = list(
                 evaluation.get("fail_reasons", [])
@@ -382,7 +377,9 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
 
         new_state = dict(state)
         new_state["evaluation"] = evaluation
-        new_state["passed"] = bool(evaluation.get("pass")) and not hard_fail
+        # `evaluation["pass"]` is already False when the hard-fail condition above
+        # fired, so no additional and-not-hard_fail guard is needed here.
+        new_state["passed"] = bool(evaluation.get("pass"))
         new_state["fix_instructions"] = fix_instructions
         new_state["support_warning"] = support_warning
         return new_state
@@ -415,55 +412,61 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
 
     def persist_results_node(state: Dict[str, Any]) -> Dict[str, Any]:
         _ensure_not_timed_out(state)
-        job.attempt_count = state["attempt_no"]
-        job.status = "completed" if state["passed"] else "failed"
-        session.add(job)
-        session.commit()
-
-        _replace_tags(session, document.id, state["tags"])
-        _replace_clues(session, document.id, state["clues"])
-        session.exec(
-            delete(DocumentClaim).where(
-                DocumentClaim.document_id == document.id,
-                DocumentClaim.job_id == job.id,
-            )
-        )
-        session.exec(
-            delete(DocumentRiskFlag).where(
-                DocumentRiskFlag.document_id == document.id,
-                DocumentRiskFlag.job_id == job.id,
-            )
-        )
-        for item in state.get("citations", []):
-            session.add(
-                DocumentClaim(
-                    document_id=document.id,
-                    job_id=job.id,
-                    claim_text=item.claim_text,
-                    quote_text=item.quote_text,
-                    source_start=item.source_start,
-                    source_end=item.source_end,
-                    confidence=item.confidence,
+        # All writes (tags, clues, claims, risk-flags, tag-summary, job status) are
+        # batched into a single commit so the DB never sees a "completed" job with
+        # partially-written or already-deleted child data.
+        try:
+            job.attempt_count = state["attempt_no"]
+            _replace_tags(session, document.id, state["tags"])
+            _replace_clues(session, document.id, state["clues"])
+            session.exec(
+                delete(DocumentClaim).where(
+                    DocumentClaim.document_id == document.id,
+                    DocumentClaim.job_id == job.id,
                 )
             )
-        for item in state.get("risk_flags", []):
-            session.add(
-                DocumentRiskFlag(
-                    document_id=document.id,
-                    job_id=job.id,
-                    severity=item.severity,
-                    category=item.category,
-                    text_span=item.text_span,
-                    suggested_fix=item.suggested_fix,
+            session.exec(
+                delete(DocumentRiskFlag).where(
+                    DocumentRiskFlag.document_id == document.id,
+                    DocumentRiskFlag.job_id == job.id,
                 )
             )
-        tag_summary = persist_tag_summary(
-            session,
-            document_id=document.id,
-            job_id=job.id,
-            raw_tags=state["tags"],
-        )
-        session.commit()
+            for item in state.get("citations", []):
+                session.add(
+                    DocumentClaim(
+                        document_id=document.id,
+                        job_id=job.id,
+                        claim_text=item.claim_text,
+                        quote_text=item.quote_text,
+                        source_start=item.source_start,
+                        source_end=item.source_end,
+                        confidence=item.confidence,
+                    )
+                )
+            for item in state.get("risk_flags", []):
+                session.add(
+                    DocumentRiskFlag(
+                        document_id=document.id,
+                        job_id=job.id,
+                        severity=item.severity,
+                        category=item.category,
+                        text_span=item.text_span,
+                        suggested_fix=item.suggested_fix,
+                    )
+                )
+            tag_summary = persist_tag_summary(
+                session,
+                document_id=document.id,
+                job_id=job.id,
+                raw_tags=state["tags"],
+            )
+            # Set final status only after all child writes are staged — single atomic commit.
+            job.status = "completed" if state["passed"] else "failed"
+            session.add(job)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
         new_state = dict(state)
         new_state.update(tag_summary)
         return new_state
@@ -503,9 +506,12 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
         session.add(job)
         session.commit()
 
+        max_attempt_no = session.exec(
+            select(func.max(JobAttempt.attempt_no)).where(JobAttempt.job_id == job.id)
+        ).one() or 0
         failure_attempt = JobAttempt(
             job_id=job.id,
-            attempt_no=job.attempt_count + 1,
+            attempt_no=max_attempt_no + 1,
             audience=job.audience or job.selected_audience or "auto",
             agent_used="system_error",
             generated_one_line_summary="",
@@ -530,12 +536,18 @@ def run_job_pipeline(session: Session, job: Job) -> Job:
 
     session.refresh(job)
 
-    # Check if we should retrain the ML router (every N completed jobs)
+    # Check if we should retrain the ML router (every N completed jobs).
+    # Runs in a daemon thread so it does not block the HTTP response.
     if job.status == "completed":
-        try:
-            _maybe_retrain(session)
-        except Exception:
-            logger.exception("Auto-retrain check failed — non-fatal, continuing.")
+        def _retrain_in_background() -> None:
+            try:
+                from app.db import engine as _bg_engine
+                with Session(_bg_engine) as bg_session:
+                    _maybe_retrain(bg_session)
+            except Exception:
+                logger.exception("Background auto-retrain failed — non-fatal.")
+
+        threading.Thread(target=_retrain_in_background, daemon=True).start()
 
     return job
 
@@ -714,11 +726,11 @@ def _replace_tags(session: Session, document_id: int, tags: List[str]) -> None:
     tags_by_name = {tag.name: tag for tag in existing_tags}
     missing = [name for name in names if name not in tags_by_name]
 
-    for name in missing:
-        session.exec(
-            text("INSERT OR IGNORE INTO tag (name) VALUES (:name)").bindparams(
-                name=name
-            )
+    if missing:
+        session.execute(
+            _sqlite_insert(Tag.__table__)
+            .values([{"name": n} for n in missing])
+            .on_conflict_do_nothing(index_elements=["name"])
         )
 
     if missing:
@@ -735,17 +747,26 @@ def _replace_clues(session: Session, document_id: int, clues: List[str]) -> None
     session.exec(delete(DocumentClue).where(DocumentClue.document_id == document_id))
 
     for clue in clues:
-        text = clue.strip()
-        if not text:
+        clue_text = clue.strip()
+        if not clue_text:
             continue
-        session.add(DocumentClue(document_id=document_id, clue_text=text))
+        session.add(DocumentClue(document_id=document_id, clue_text=clue_text))
 
 
 def _normalize_list(value: Any) -> List[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     if isinstance(value, str):
-        return [item.strip() for item in value.split(",") if item.strip()]
+        # Try JSON-array parse first so prose strings with commas are not split.
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        except json.JSONDecodeError:
+            pass
+        # Treat the whole string as a single item rather than splitting on commas,
+        # which would silently corrupt prose (e.g. "45%, consistent with phase II").
+        return [value.strip()] if value.strip() else []
     return []
 
 
@@ -781,66 +802,8 @@ def _format_failure_reason(exc: Exception) -> str:
         return "OpenAI quota or rate limit exceeded."
     if "invalid_api_key" in lower or "api key" in lower or "authentication" in lower:
         return "OpenAI API key invalid or missing."
-    if "model_not_found" in lower or "model" in lower and "not found" in lower:
+    if "model_not_found" in lower or ("model" in lower and "not found" in lower):
         return "Requested model is unavailable."
     if "timeout" in lower or "timed out" in lower:
         return "LLM request timed out."
     return f"LLM request failed: {message}"
-
-# keywords are huristic sanity check. 
-def _filter_candidates_by_keywords(text: str, candidates: List[str]) -> List[str]:
-    if not text or not candidates:
-        return []
-
-    keywords = {
-        "commercial": [
-            "market",
-            "pricing",
-            "revenue",
-            "sales",
-            "commercial",
-            "launch",
-            "positioning",
-            "brand",
-            "customer",
-            "segment",
-            "demand",
-            "competition",
-        ],
-        "medical_affairs": [
-            "clinical",
-            "patient",
-            "safety",
-            "efficacy",
-            "trial",
-            "adverse",
-            "label",
-            "regulatory",
-            "outcome",
-            "physician",
-            "kol",
-            "publication",
-        ],
-        "r_and_d": [
-            "experiment",
-            "assay",
-            "protocol",
-            "method",
-            "preclinical",
-            "hypothesis",
-            "mechanism",
-            "in vivo",
-            "in vitro",
-            "model",
-            "dataset",
-            "lab",
-        ],
-    }
-
-    haystack = text.lower()
-    filtered = []
-    for candidate in candidates:
-        terms = keywords.get(candidate, [])
-        if any(term in haystack for term in terms):
-            filtered.append(candidate)
-    return filtered

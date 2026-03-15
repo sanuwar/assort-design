@@ -7,10 +7,16 @@ from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
 
+from app.utils import env_float
+
 DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 DEFAULT_TIMEOUT_SEC = 30.0
 
 logger = logging.getLogger(__name__)
+
+# Module-level singleton — created once on first real call, reused for all subsequent LLM calls.
+# Avoids re-establishing a new httpx connection pool on every pipeline invocation.
+_client: Optional[OpenAI] = None
 
 
 def has_api_key() -> bool:
@@ -24,29 +30,39 @@ def is_mock_mode() -> bool:
 def is_langsmith_tracing_enabled() -> bool:
     return os.getenv("LANGSMITH_TRACING", "").strip().lower() in ("1", "true", "yes", "on")
 
-# Small factory/helper with type dict that returns an OpenAI client only if it can be used, and optionally wraps it for tracing.
+# Factory that initializes the OpenAI client once and caches it for the lifetime of the process.
+# Returns None when no API key is present (mock mode); otherwise returns the shared singleton.
 def get_client() -> Optional[OpenAI]:
+    global _client
     if not has_api_key():
         return None
-    timeout_value = os.getenv("OPENAI_TIMEOUT_SEC", "").strip()
-    timeout = DEFAULT_TIMEOUT_SEC
-    if timeout_value:
-        try:
-            timeout = float(timeout_value)
-        except ValueError:
-            timeout = DEFAULT_TIMEOUT_SEC
-    client = OpenAI(timeout=timeout)
+    if _client is not None:
+        return _client
+
+    timeout = env_float("OPENAI_TIMEOUT_SEC", DEFAULT_TIMEOUT_SEC)
+
+    new_client: OpenAI = OpenAI(timeout=timeout)
     if is_langsmith_tracing_enabled():
         try:
             from langsmith.wrappers import wrap_openai
-
-            client = wrap_openai(client)
+            new_client = wrap_openai(new_client)
         except Exception:
             logger.debug("LangSmith wrapping failed; continuing without tracing.", exc_info=True)
-    return client
+
+    _client = new_client
+    logger.info("OpenAI client initialised (model=%s, timeout=%ss)", DEFAULT_MODEL, timeout)
+    return _client
+
+
+def _mode_label() -> str:
+    """Return a short string identifying the current execution mode for log lines."""
+    if is_mock_mode():
+        return "MOCK"
+    return f"REAL model={DEFAULT_MODEL}"
 
 
 def route_audience(router_prompt: str, document_text: str) -> Dict[str, Any]:
+    logger.info("LLM call: route_audience [%s]", _mode_label())
     if is_mock_mode():
         return _mock_route(document_text)
     user_prompt = f"Document:\n{document_text}"
@@ -61,6 +77,7 @@ def generate_content(
     max_words: int,
     fix_instructions: List[str] | None = None,
 ) -> Dict[str, Any]:
+    logger.info("LLM call: generate_content [%s]", _mode_label())
     if is_mock_mode():
         return _mock_generate(document_text, required_sections, max_words)
 
@@ -84,6 +101,7 @@ def evaluate_content(
     required_sections: List[str],
     max_words: int,
 ) -> Dict[str, Any]:
+    logger.info("LLM call: evaluate_content [%s]", _mode_label())
     if is_mock_mode():
         return _mock_evaluate(one_line_summary, decision_bullets, required_sections, max_words)
 
@@ -108,6 +126,7 @@ def _call_llm_json(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
     if not client:
         raise RuntimeError("OpenAI client not available.")
 
+    logger.debug("_call_llm_json: sending request to model=%s", DEFAULT_MODEL)
     response = client.responses.create(
         model=DEFAULT_MODEL,
         input=[
@@ -149,7 +168,17 @@ def _parse_json(text: str) -> Dict[str, Any]:
             try:
                 return json.loads(snippet)
             except json.JSONDecodeError:
+                logger.warning(
+                    "LLM response JSON parse failed after bracket extraction. "
+                    "Raw response (first 400 chars): %r",
+                    text[:400],
+                )
                 return {}
+        logger.warning(
+            "LLM response contains no JSON object. "
+            "Raw response (first 400 chars): %r",
+            text[:400],
+        )
     return {}
 
 
