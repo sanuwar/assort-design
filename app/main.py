@@ -16,9 +16,10 @@ from urllib.parse import urljoin, urlparse
 import httpx
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import text
 from sqlmodel import col, func, select
 
 from app.config import get_audience_profile
@@ -36,6 +37,8 @@ from app.models import (
     Tag,
     TagAlias,
 )
+from app.llm import DEFAULT_MODEL, is_mock_mode
+from app.utils import env_int
 from app.schema_version import SCHEMA_VERSION
 from app.version import APP_VERSION
 from app.ml_router import ARTIFACTS_DIR, _ml_router
@@ -94,9 +97,20 @@ MAX_URL_CHARS = 2048
 MAX_SEARCH_CHARS = 200
 MAX_URL_REDIRECTS = 3
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+MAX_FETCH_BYTES = 5 * 1024 * 1024    # 5 MB — raw response cap before HTML parsing
+_URL_FETCH_TIMEOUT = 10.0            # seconds per hop (reduced from 20 for demo responsiveness)
+# Only these content-types are accepted from URL fetches; binaries/PDFs/etc. are rejected.
+_ALLOWED_CONTENT_TYPE_PREFIXES = ("text/html", "text/plain")
 RATE_LIMIT_WINDOW_SEC = 60
 RATE_LIMIT_MAX = 20
 SHOW_TOOL_BADGES = os.getenv("SHOW_TOOL_BADGES", "true").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+# Admin utilities (e.g. backfill) are disabled by default. Set ADMIN_ENABLED=true in .env only when needed.
+ADMIN_ENABLED = os.getenv("ADMIN_ENABLED", "false").strip().lower() in (
     "1",
     "true",
     "yes",
@@ -126,21 +140,33 @@ def _build_home_context(selected_audience: Optional[str]) -> dict:
             select(Document).order_by(Document.created_at.desc()).limit(7)
         ).all()
 
+        # Batch-fetch the most recent job per doc (avoids N individual queries).
+        doc_ids = [d.id for d in recent_docs]
+        jobs_for_docs = session.exec(
+            select(Job)
+            .where(Job.document_id.in_(doc_ids))
+            .order_by(Job.created_at.desc())
+        ).all() if doc_ids else []
+        job_map: dict[int, Job] = {}
+        for j in jobs_for_docs:
+            if j.document_id not in job_map:
+                job_map[j.document_id] = j
+
+        # Batch-fetch the most recent attempt per job.
+        job_ids = [j.id for j in job_map.values() if j.id is not None]
+        attempts_for_jobs = session.exec(
+            select(JobAttempt)
+            .where(JobAttempt.job_id.in_(job_ids))
+            .order_by(JobAttempt.attempt_no.desc())
+        ).all() if job_ids else []
+        attempt_map: dict[int, JobAttempt] = {}
+        for a in attempts_for_jobs:
+            if a.job_id not in attempt_map:
+                attempt_map[a.job_id] = a
+
         for doc in recent_docs:
-            job = session.exec(
-                select(Job)
-                .where(Job.document_id == doc.id)
-                .order_by(Job.created_at.desc())
-            ).first()
-
-            attempt = None
-            if job:
-                attempt = session.exec(
-                    select(JobAttempt)
-                    .where(JobAttempt.job_id == job.id)
-                    .order_by(JobAttempt.attempt_no.desc())
-                ).first()
-
+            job = job_map.get(doc.id)
+            attempt = attempt_map.get(job.id) if job else None
             history.append(
                 {
                     "job_id": job.id if job else None,
@@ -152,44 +178,31 @@ def _build_home_context(selected_audience: Optional[str]) -> dict:
                 }
             )
 
-        jobs = session.exec(select(Job)).all()
-        for job in jobs:
-            audience = job.audience or job.selected_audience or "auto"
+        total_docs = session.exec(select(func.count(Document.id))).one()
+        total_jobs = 0
+        total_completed = 0
+        total_failed = 0
+        for audience_val, selected_val, status in session.exec(
+            select(Job.audience, Job.selected_audience, Job.status)
+        ).all():
+            audience = audience_val or selected_val or "auto"
             route_counts[audience] = route_counts.get(audience, 0) + 1
-
-    total_docs = 0
-    total_jobs = 0
-    total_completed = 0
-    total_failed = 0
-    with get_session() as session:
-        total_docs = len(session.exec(select(Document)).all())
-        jobs = session.exec(select(Job)).all()
-        total_jobs = len(jobs)
-        for job in jobs:
-            if job.status == "completed":
+            total_jobs += 1
+            if status == "completed":
                 total_completed += 1
-            if job.status == "failed":
+            elif status == "failed":
                 total_failed += 1
 
-    success_rate = 0
-    if total_jobs:
-        success_rate = round((total_completed / total_jobs) * 100)
-
-    # Tag data for homepage cards
-    top_tags: list[dict] = []
-    recent_tags: list[str] = []
-    with get_session() as session:
-        # Top tags by occurrence count
+        # Tag data — merged into the same session to avoid a second round-trip.
         rows = session.exec(
             select(Tag.name, func.count(DocumentTag.tag_id).label("cnt"))
             .join(DocumentTag, Tag.id == DocumentTag.tag_id)
-            .group_by(DocumentTag.tag_id)
+            .group_by(Tag.id, Tag.name)
             .order_by(func.count(DocumentTag.tag_id).desc())
             .limit(8)
         ).all()
-        top_tags = [{"name": r[0], "count": r[1]} for r in rows]
+        top_tags: list[dict] = [{"name": r[0], "count": r[1]} for r in rows]
 
-        # Recent tags from the latest documents
         recent_rows = session.exec(
             select(Tag.name)
             .join(DocumentTag, Tag.id == DocumentTag.tag_id)
@@ -198,7 +211,11 @@ def _build_home_context(selected_audience: Optional[str]) -> dict:
             .order_by(Document.created_at.desc())
             .limit(8)
         ).all()
-        recent_tags = [r for r in recent_rows] if recent_rows else []
+        recent_tags: list[str] = [r for r in recent_rows] if recent_rows else []
+
+    success_rate = 0
+    if total_jobs:
+        success_rate = round((total_completed / total_jobs) * 100)
 
     return {
         "audiences": AUDIENCES,
@@ -218,25 +235,74 @@ def _build_home_context(selected_audience: Optional[str]) -> dict:
     }
 
 
+def _build_related_docs(
+    session,
+    exclude_doc_id: int,
+    canonical_tags: list[str],
+    limit: int = 10,
+) -> list[dict]:
+    """Return documents related to exclude_doc_id ranked by tag Jaccard similarity."""
+    if not canonical_tags:
+        return []
+    related_summaries = session.exec(
+        select(DocumentTagSummary)
+        .where(DocumentTagSummary.document_id != exclude_doc_id)
+        .order_by(DocumentTagSummary.created_at.desc())
+        .limit(200)
+    ).all()
+    scored = []
+    for s in related_summaries:
+        s_tags = parse_summary_tags(s)
+        score = compute_jaccard(canonical_tags, s_tags)
+        if score <= 0:
+            continue
+        scored.append({
+            "document_id": s.document_id,
+            "job_id": s.job_id,
+            "score": score,
+            "overlap": sorted(set(canonical_tags).intersection(s_tags)),
+        })
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    scored = scored[:limit]
+    if not scored:
+        return []
+    doc_ids = [x["document_id"] for x in scored]
+    docs = session.exec(select(Document).where(Document.id.in_(doc_ids))).all()
+    doc_map = {d.id: d for d in docs}
+    jobs = session.exec(
+        select(Job)
+        .where(Job.document_id.in_(doc_ids))
+        .order_by(Job.created_at.desc())
+    ).all()
+    job_map: dict[int, Job] = {}
+    for j in jobs:
+        if j.document_id not in job_map:
+            job_map[j.document_id] = j
+    result = []
+    for x in scored:
+        doc = doc_map.get(x["document_id"])
+        job = job_map.get(x["document_id"])
+        if not doc:
+            continue
+        result.append({
+            "document_id": doc.id,
+            "job_id": job.id if job else None,
+            "audience": _audience_display(
+                (job.audience or job.selected_audience or "auto") if job else "auto"
+            ),
+            "status": job.status if job else "pending",
+            "snippet": (doc.content or "")[:160],
+            "score_pct": int(round(x["score"] * 100)),
+            "overlap": x["overlap"],
+        })
+    return result
+
+
 def _normalize_page(page: Optional[int]) -> int:
     if not page or page < 1:
         return 1
     return page
 
-
-def _cross_detail_from_job(job: Job) -> Optional[str]:
-    audience_code = job.audience or job.selected_audience or "auto"
-    if _audience_display(audience_code) != "Cross-Functional":
-        return None
-    candidates = _safe_json_list(getattr(job, "routing_candidates_json", "[]"))
-    candidates_display = [
-        _audience_display(aud) for aud in candidates if isinstance(aud, str)
-    ]
-    if candidates_display:
-        return " + ".join(candidates_display)
-    if job.selected_audience != "auto":
-        return "Mixed stakeholders (manual override)"
-    return "Mixed stakeholders (auto-routed)"
 
 
 def _build_claim_views(
@@ -272,7 +338,8 @@ def _build_claim_views(
     return views
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
+    logging.getLogger("app").setLevel(logging.INFO)
     init_db()
     yield
 
@@ -294,14 +361,42 @@ def root() -> RedirectResponse:
     return RedirectResponse(url="/web")
 
 
+@app.get("/health", include_in_schema=False)
+def health() -> JSONResponse:
+    """Liveness + readiness check. Returns 200 when healthy, 503 when the DB is unreachable."""
+    db_status = "ok"
+    http_status = 200
+    overall = "ok"
+
+    try:
+        with get_session() as session:
+            session.exec(select(func.count(Document.id))).one()
+    except Exception as exc:
+        db_status = f"error: {exc}"
+        overall = "degraded"
+        http_status = 503
+
+    return JSONResponse(
+        status_code=http_status,
+        content={
+            "status": overall,
+            "version": APP_VERSION,
+            "schema_version": SCHEMA_VERSION,
+            "db": db_status,
+            "llm_mode": "mock" if is_mock_mode() else "real",
+            "llm_model": DEFAULT_MODEL if not is_mock_mode() else None,
+        },
+    )
+
+
 @app.get("/web", response_class=HTMLResponse)
 def home(request: Request, audience: Optional[str] = None) -> HTMLResponse:
     context = _build_home_context(audience)
 
     return templates.TemplateResponse(
+        request,
         "home.html",
         {
-            "request": request,
             **context,
             "sample_text": SAMPLE_TEXT,
         },
@@ -392,16 +487,24 @@ def watchlist(request: Request, page: int = 1) -> HTMLResponse:
             select(Job).order_by(Job.created_at.desc()).limit(30)
         ).all()
 
+        # Batch-fetch the most recent attempt per job (avoids N individual queries).
+        wl_job_ids = [j.id for j in jobs if j.id is not None]
+        wl_attempts = session.exec(
+            select(JobAttempt)
+            .where(JobAttempt.job_id.in_(wl_job_ids))
+            .order_by(JobAttempt.attempt_no.desc())
+        ).all() if wl_job_ids else []
+        wl_attempt_map: dict[int, JobAttempt] = {}
+        for a in wl_attempts:
+            if a.job_id not in wl_attempt_map:
+                wl_attempt_map[a.job_id] = a
+
         for job in jobs:
             issues = []
             if job.status == "failed":
                 issues.append("Failed evaluation")
 
-            attempt = session.exec(
-                select(JobAttempt)
-                .where(JobAttempt.job_id == job.id)
-                .order_by(JobAttempt.attempt_no.desc())
-            ).first()
+            attempt = wl_attempt_map.get(job.id)
 
             if attempt and not attempt.generated_mindmap:
                 issues.append("Mind map missing")
@@ -429,9 +532,9 @@ def watchlist(request: Request, page: int = 1) -> HTMLResponse:
     has_next = len(items) > end
 
     return templates.TemplateResponse(
+        request,
         "watchlist.html",
         {
-            "request": request,
             "items": page_items,
             "page": page,
             "has_prev": page > 1,
@@ -450,9 +553,9 @@ def about(request: Request) -> HTMLResponse:
         "Revise: iterate up to max retries, then persist outputs.",
     ]
     return templates.TemplateResponse(
+        request,
         "about.html",
         {
-            "request": request,
             "steps": steps,
         },
     )
@@ -490,9 +593,9 @@ def tag_insights(request: Request) -> HTMLResponse:
     ]
 
     return templates.TemplateResponse(
+        request,
         "tag_insights.html",
         {
-            "request": request,
             "domain_counts": domain_counts,
             "rising_tags": rising_tags[:15],
             "cooccurrence": cooccurrence,
@@ -511,7 +614,7 @@ def ml_router_insights(request: Request) -> HTMLResponse:
 
     # Compute retrain countdown
     retrain_info = None
-    retrain_every = int(os.getenv("RETRAIN_EVERY_N_JOBS", "20"))
+    retrain_every = env_int("RETRAIN_EVERY_N_JOBS", 20)
     if retrain_every > 0:
         with get_session() as session:
             n_completed = len(
@@ -540,8 +643,9 @@ def ml_router_insights(request: Request) -> HTMLResponse:
         }
 
     return templates.TemplateResponse(
+        request,
         "ml_router_insights.html",
-        {"request": request, "stats": stats, "retrain_info": retrain_info},
+        {"stats": stats, "retrain_info": retrain_info},
     )
 
 
@@ -550,8 +654,9 @@ def tag_aliases(request: Request) -> HTMLResponse:
     with get_session() as session:
         aliases = session.exec(select(TagAlias).order_by(TagAlias.alias)).all()
     return templates.TemplateResponse(
+        request,
         "tag_aliases.html",
-        {"request": request, "aliases": aliases},
+        {"aliases": aliases},
     )
 
 
@@ -563,15 +668,22 @@ def create_tag_alias(
 ) -> HTMLResponse:
     alias_value = alias.strip()
     canonical_value = canonical.strip()
+    _MAX_ALIAS_CHARS = 200
     if not alias_value or not canonical_value:
+        error = "Alias and canonical value are required."
+    elif len(alias_value) > _MAX_ALIAS_CHARS or len(canonical_value) > _MAX_ALIAS_CHARS:
+        error = f"Alias and canonical value must each be under {_MAX_ALIAS_CHARS} characters."
+    else:
+        error = None
+    if error:
         with get_session() as session:
             aliases = session.exec(select(TagAlias).order_by(TagAlias.alias)).all()
         return templates.TemplateResponse(
+            request,
             "tag_aliases.html",
             {
-                "request": request,
                 "aliases": aliases,
-                "error": "Alias and canonical value are required.",
+                "error": error,
             },
             status_code=400,
         )
@@ -597,7 +709,9 @@ def project_visuals() -> FileResponse:
 
 
 @app.get("/web/admin/backfill-tag-summaries", response_class=HTMLResponse)
-def backfill_tag_summaries(request: Request) -> HTMLResponse:
+def backfill_tag_summaries() -> HTMLResponse:
+    if not ADMIN_ENABLED:
+        raise HTTPException(status_code=404, detail="Not found.")
     count = 0
     with get_session() as session:
         docs = session.exec(select(Document).order_by(Document.created_at.desc())).all()
@@ -645,6 +759,8 @@ def documents_index(
     page = _normalize_page(page)
     limit = 10
     search = (q or "").strip()
+    if search:
+        _check_rate_limit(request)
     if len(search) > MAX_SEARCH_CHARS:
         search = search[:MAX_SEARCH_CHARS]
     domain_filter = (domain or "").strip() or None
@@ -655,9 +771,8 @@ def documents_index(
     documents: list[dict[str, object]] = []
 
     with get_session() as session:
-        all_jobs = session.exec(select(Job)).all()
-        for job in all_jobs:
-            audience_code = job.audience or job.selected_audience or "auto"
+        for audience_val, selected_val in session.exec(select(Job.audience, Job.selected_audience)).all():
+            audience_code = audience_val or selected_val or "auto"
             route_counts[audience_code] = route_counts.get(audience_code, 0) + 1
 
         if search:
@@ -786,9 +901,9 @@ def documents_index(
         has_next = end < len(filtered_docs)
 
     return templates.TemplateResponse(
+        request,
         "documents.html",
         {
-            "request": request,
             "audiences": AUDIENCES,
             "audience_display": audience_display,
             "selected_audience": selected_audience,
@@ -822,9 +937,9 @@ def create_document(
     if input_url and len(input_url) > MAX_URL_CHARS:
         context = _build_home_context(audience)
         return templates.TemplateResponse(
+            request,
             "home.html",
             {
-                "request": request,
                 **context,
                 "sample_text": SAMPLE_TEXT,
                 "error": "URL is too long.",
@@ -840,9 +955,9 @@ def create_document(
         if not (fname.endswith(".pdf") or fname.endswith(".docx")):
             context = _build_home_context(audience)
             return templates.TemplateResponse(
+                request,
                 "home.html",
                 {
-                    "request": request,
                     **context,
                     "sample_text": SAMPLE_TEXT,
                     "error": "Only PDF and Word (.docx) files are supported.",
@@ -853,9 +968,9 @@ def create_document(
         if len(file_bytes) > MAX_UPLOAD_BYTES:
             context = _build_home_context(audience)
             return templates.TemplateResponse(
+                request,
                 "home.html",
                 {
-                    "request": request,
                     **context,
                     "sample_text": SAMPLE_TEXT,
                     "error": "File is too large (max 10 MB).",
@@ -879,9 +994,9 @@ def create_document(
             error_message = "Could not extract text from the uploaded file. Is it a text-based (not scanned) PDF or valid .docx?"
         context = _build_home_context(audience)
         return templates.TemplateResponse(
+            request,
             "home.html",
             {
-                "request": request,
                 **context,
                 "sample_text": SAMPLE_TEXT,
                 "error": error_message,
@@ -925,7 +1040,31 @@ def run_job(request: Request, job_id: int) -> HTMLResponse:
         job = session.get(Job, job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Job not found.")
-        run_job_pipeline(session, job)
+        if job.status == "completed":
+            return RedirectResponse(url=f"/web/jobs/{job_id}?analysis=1", status_code=303)
+        if job.status == "running":
+            return RedirectResponse(url=f"/web/jobs/{job_id}", status_code=303)
+
+        # Atomically claim the job by setting status='running' only when it is still
+        # in a runnable state.  Concurrent requests will see rowcount=0 and redirect.
+        result = session.execute(
+            text(
+                "UPDATE job SET status = 'running'"
+                " WHERE id = :id AND status IN ('pending', 'failed')"
+            ).bindparams(id=job_id)
+        )
+        session.commit()
+        if result.rowcount == 0:
+            session.refresh(job)
+            if job.status == "completed":
+                return RedirectResponse(url=f"/web/jobs/{job_id}?analysis=1", status_code=303)
+            return RedirectResponse(url=f"/web/jobs/{job_id}", status_code=303)
+
+        session.refresh(job)
+        try:
+            run_job_pipeline(session, job)
+        except Exception:
+            logger.exception("Pipeline failed for job %d — job marked failed, redirecting.", job_id)
     return RedirectResponse(url=f"/web/jobs/{job_id}?analysis=1", status_code=303)
 
 
@@ -968,64 +1107,13 @@ def job_detail(request: Request, job_id: int) -> HTMLResponse:
         ).all()
 
         # Related documents via tag Jaccard similarity
-        related_docs = []
         summary_row = session.exec(
             select(DocumentTagSummary)
             .where(DocumentTagSummary.document_id == job.document_id)
             .order_by(DocumentTagSummary.created_at.desc())
         ).first()
         canonical_tags = parse_summary_tags(summary_row) if summary_row else []
-        if canonical_tags:
-            related_summaries = session.exec(
-                select(DocumentTagSummary)
-                .where(DocumentTagSummary.document_id != job.document_id)
-                .order_by(DocumentTagSummary.created_at.desc())
-                .limit(200)
-            ).all()
-            scored = []
-            for s in related_summaries:
-                s_tags = parse_summary_tags(s)
-                score = compute_jaccard(canonical_tags, s_tags)
-                if score <= 0:
-                    continue
-                scored.append({
-                    "document_id": s.document_id,
-                    "job_id": s.job_id,
-                    "score": score,
-                    "overlap": sorted(set(canonical_tags).intersection(s_tags)),
-                })
-            scored.sort(key=lambda x: x["score"], reverse=True)
-            scored = scored[:8]
-            rel_doc_ids = [x["document_id"] for x in scored]
-            rel_docs = session.exec(
-                select(Document).where(Document.id.in_(rel_doc_ids))
-            ).all()
-            rel_doc_map = {d.id: d for d in rel_docs}
-            rel_jobs = session.exec(
-                select(Job)
-                .where(Job.document_id.in_(rel_doc_ids))
-                .order_by(Job.created_at.desc())
-            ).all()
-            rel_job_map: dict[int, Job] = {}
-            for rj in rel_jobs:
-                if rj.document_id not in rel_job_map:
-                    rel_job_map[rj.document_id] = rj
-            for x in scored:
-                rd = rel_doc_map.get(x["document_id"])
-                rj = rel_job_map.get(x["document_id"])
-                if not rd:
-                    continue
-                related_docs.append({
-                    "document_id": rd.id,
-                    "job_id": rj.id if rj else None,
-                    "audience": _audience_display(
-                        (rj.audience or rj.selected_audience or "auto") if rj else "auto"
-                    ),
-                    "status": rj.status if rj else "pending",
-                    "snippet": (rd.content or "")[:160],
-                    "score_pct": int(round(x["score"] * 100)),
-                    "overlap": x["overlap"],
-                })
+        related_docs = _build_related_docs(session, job.document_id, canonical_tags, limit=8)
 
     audience_code = job.audience or job.selected_audience or "auto"
     audience_label = _audience_display(audience_code)
@@ -1038,7 +1126,6 @@ def job_detail(request: Request, job_id: int) -> HTMLResponse:
     if getattr(job, "routing_confidence", None) is not None:
         routing_confidence_pct = int(round(float(job.routing_confidence) * 100))
     routing_source = getattr(job, "routing_source", None)
-    router_version = getattr(job, "router_version", None)
 
     ml_explanation = None
     if routing_source in ("ml", "ml+llm_fallback") and doc and doc.content:
@@ -1085,9 +1172,9 @@ def job_detail(request: Request, job_id: int) -> HTMLResponse:
     supported_count = len([c for c in claim_views if c["quote_text"]])
 
     return templates.TemplateResponse(
+        request,
         "job_detail.html",
         {
-            "request": request,
             "job": job,
             "audience_label": audience_label,
             "routing_candidates": routing_candidates_display,
@@ -1141,72 +1228,7 @@ def document_detail(request: Request, doc_id: int) -> HTMLResponse:
         canonical_tags = parse_summary_tags(summary_row) if summary_row else []
         domain_label = summary_row.domain if summary_row else None
 
-        related_docs = []
-        if canonical_tags:
-            related_summaries = session.exec(
-                select(DocumentTagSummary)
-                .where(DocumentTagSummary.document_id != doc.id)
-                .order_by(DocumentTagSummary.created_at.desc())
-                .limit(200)
-            ).all()
-            scored = []
-            for summary in related_summaries:
-                tags = parse_summary_tags(summary)
-                score = compute_jaccard(canonical_tags, tags)
-                if score <= 0:
-                    continue
-                overlap = sorted(set(canonical_tags).intersection(tags))
-                scored.append(
-                    {
-                        "document_id": summary.document_id,
-                        "job_id": summary.job_id,
-                        "score": score,
-                        "overlap": overlap,
-                    }
-                )
-            scored.sort(key=lambda item: item["score"], reverse=True)
-            scored = scored[:10]
-
-            related_doc_ids = [item["document_id"] for item in scored]
-            docs = session.exec(
-                select(Document).where(Document.id.in_(related_doc_ids))
-            ).all()
-            doc_map = {item.id: item for item in docs}
-
-            jobs = session.exec(
-                select(Job)
-                .where(Job.document_id.in_(related_doc_ids))
-                .order_by(Job.created_at.desc())
-            ).all()
-            job_map: dict[int, Job] = {}
-            for item in jobs:
-                if item.document_id not in job_map:
-                    job_map[item.document_id] = item
-
-            for item in scored:
-                related_doc = doc_map.get(item["document_id"])
-                related_job = job_map.get(item["document_id"])
-                if not related_doc:
-                    continue
-                related_docs.append(
-                    {
-                        "document_id": related_doc.id,
-                        "job_id": related_job.id if related_job else None,
-                        "audience": _audience_display(
-                            related_job.audience
-                            if related_job and related_job.audience
-                            else (
-                                related_job.selected_audience
-                                if related_job
-                                else "auto"
-                            )
-                        ),
-                        "status": related_job.status if related_job else "pending",
-                        "snippet": (related_doc.content or "")[:160],
-                        "score_pct": int(round(item["score"] * 100)),
-                        "overlap": item["overlap"],
-                    }
-                )
+        related_docs = _build_related_docs(session, doc.id, canonical_tags, limit=10)
 
         final_summary = None
         if job:
@@ -1279,9 +1301,9 @@ def document_detail(request: Request, doc_id: int) -> HTMLResponse:
                 cross_functional_detail = "Mixed stakeholders (auto-routed)"
 
     return templates.TemplateResponse(
+        request,
         "document_detail.html",
         {
-            "request": request,
             "document": doc,
             "job": job,
             "audience_label": audience_label,
@@ -1312,9 +1334,9 @@ def attempt_detail(request: Request, attempt_id: int) -> HTMLResponse:
         document = session.get(Document, job.document_id) if job else None
 
     return templates.TemplateResponse(
+        request,
         "attempt_detail.html",
         {
-            "request": request,
             "attempt": attempt,
             "job": job,
             "document": document,
@@ -1350,6 +1372,16 @@ def _extract_file_text(file_bytes: bytes, filename: str) -> str:
 
 
 def fetch_url_text(url: str) -> str:
+    """Fetch plain text from a URL.
+
+    Hardening notes:
+    - Content-Type is checked before the body is parsed; non-HTML/text responses are rejected.
+    - Raw bytes are capped at MAX_FETCH_BYTES before BeautifulSoup sees them.
+    - Timeout is capped at _URL_FETCH_TIMEOUT per hop to keep demo runs responsive.
+    - Known limitation: DNS rebinding (TOCTOU) is not fully mitigated. _is_safe_url()
+      resolves DNS once; httpx resolves again independently. A full fix requires a custom
+      httpx transport that reuses the validated IP — left as a production hardening item.
+    """
     url = (url or "").strip()
     if not url or len(url) > MAX_URL_CHARS:
         return ""
@@ -1367,24 +1399,52 @@ def fetch_url_text(url: str) -> str:
             logger.warning("Blocked unsafe URL fetch: %s", url[:200])
             return ""
         try:
-            response = httpx.get(
+            with httpx.stream(
+                "GET",
                 url,
-                timeout=20.0,
+                timeout=_URL_FETCH_TIMEOUT,
                 follow_redirects=False,
                 headers=headers,
-            )
-            if response.is_redirect:
-                location = response.headers.get("location")
-                if not location:
+            ) as response:
+                if response.is_redirect:
+                    location = response.headers.get("location")
+                    if not location:
+                        return ""
+                    url = urljoin(str(response.url), location)
+                    continue
+                response.raise_for_status()
+
+                # Reject non-text content types before reading the body.
+                content_type = response.headers.get("content-type", "").lower()
+                if not any(content_type.startswith(p) for p in _ALLOWED_CONTENT_TYPE_PREFIXES):
+                    logger.warning(
+                        "Blocked URL fetch — unsupported content-type %r: %s",
+                        content_type[:80],
+                        url[:200],
+                    )
                     return ""
-                url = urljoin(str(response.url), location)
-                continue
-            response.raise_for_status()
+
+                # Stream body in chunks — stop reading at MAX_FETCH_BYTES so memory
+                # is bounded even if the server sends an unbounded response.
+                chunks: list[bytes] = []
+                total = 0
+                for chunk in response.iter_bytes(chunk_size=8192):
+                    chunks.append(chunk)
+                    total += len(chunk)
+                    if total >= MAX_FETCH_BYTES:
+                        logger.warning(
+                            "URL response truncated at %d bytes: %s",
+                            MAX_FETCH_BYTES,
+                            url[:200],
+                        )
+                        break
+                raw = b"".join(chunks)[:MAX_FETCH_BYTES]
         except Exception:
             logger.exception("URL fetch failed.")
             return ""
 
-        soup = BeautifulSoup(response.text, "lxml")
+        html_text = raw.decode("utf-8", errors="replace")
+        soup = BeautifulSoup(html_text, "lxml")
         for tag in soup(["script", "style", "noscript"]):
             tag.decompose()
         text = " ".join(soup.stripped_strings)

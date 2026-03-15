@@ -20,9 +20,9 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# Ensure project root is on path when run as __main__
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_PROJECT_ROOT))
+if __name__ == "__main__":
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 DEFAULT_OUTPUT_DIR = _PROJECT_ROOT / "artifacts"
 

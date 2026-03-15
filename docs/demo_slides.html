@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Assort Design — Interview Demo</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css"/>
+<style>
+/* ── Palette ─────────────────────────────────────────────── */
+:root {
+  --navy:   #0f3460;
+  --red:    #e94560;
+  --teal:   #20b2aa;
+  --gold:   #f4a340;
+  --green:  #3cb371;
+  --indigo: #4c6fff;
+  --purple: #7c3aed;
+  --bg:     #eef3f8;
+  --card:   #ffffff;
+  --border: #d4dce8;
+  --text:   #1e2a3a;
+  --muted:  #607080;
+}
+
+/* ── Corner brackets ────────────────────────────────────── */
+.corner { position:fixed; width:30px; height:30px; z-index:9999; pointer-events:none; }
+.cb-tl  { top:16px;    left:16px;    border-top:2px solid rgba(15,52,96,.28); border-left:2px solid rgba(15,52,96,.28); }
+.cb-tr  { top:16px;    right:16px;   border-top:2px solid rgba(15,52,96,.28); border-right:2px solid rgba(15,52,96,.28); }
+.cb-bl  { bottom:16px; left:16px;    border-bottom:2px solid rgba(15,52,96,.28); border-left:2px solid rgba(15,52,96,.28); }
+.cb-br  { bottom:16px; right:16px;   border-bottom:2px solid rgba(15,52,96,.28); border-right:2px solid rgba(15,52,96,.28); }
+
+/* ── Reveal base ────────────────────────────────────────── */
+body { background: var(--bg); }
+
+.reveal {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: var(--text);
+  font-size: 18px;
+}
+
+/* Every section fills the slide height as a flex column */
+.reveal .slides section {
+  display: flex !important;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 24px 34px 20px;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* ── Typography ─────────────────────────────────────────── */
+.reveal h1 { font-size:2.15em; font-weight:800; letter-spacing:-.03em; text-transform:none; color:var(--navy); margin:0 0 .18em; }
+.reveal h2 {
+  font-size:1.28em; font-weight:700; text-transform:none; color:var(--navy);
+  display:flex; align-items:center; gap:.5em;
+  flex-shrink: 0;           /* never let heading shrink */
+  margin:0 0 .5em;
+}
+.reveal h2::after { content:''; display:block; height:3px; flex:1; background:var(--red); border-radius:2px; }
+.reveal h3 { font-size:.9em; font-weight:700; text-transform:none; color:var(--red); margin:0 0 .28em; }
+.reveal p  { font-size:.8em; line-height:1.5; margin:0 0 .42em; }
+.reveal li { font-size:.8em; line-height:1.45; }
+.reveal ul  { list-style:none; padding:0; margin:0; }
+.reveal ul li::before { content:"▸ "; color:var(--red); }
+.reveal ol  { padding-left:1.2em; margin:0; }
+.reveal code {
+  background:#eef2ff; color:var(--navy); padding:1px 5px; border-radius:4px;
+  font-size:.9em; font-family:'Cascadia Code','Consolas',monospace;
+}
+.reveal pre {
+  background:#1a2536; border-radius:8px; padding:.7em .95em;
+  font-size:.64em; line-height:1.4; margin:0; width:100%;
+  box-shadow:0 4px 18px rgba(0,0,0,.18);
+  flex:1; overflow:hidden;
+}
+.reveal pre code { background:none; color:#cdd9e5; padding:0; font-size:1em; }
+
+/* ── Layout ─────────────────────────────────────────────── */
+/* The main content block under h2 — stretches to fill remaining height */
+.body  { flex:1; display:flex; flex-direction:column; min-height:0; gap:.55em; }
+/* Two/three-column grids that fill remaining height */
+.g2    { flex:1; display:grid; grid-template-columns:1fr 1fr;   gap:.7em; align-items:start; align-content:start; min-height:0; }
+.g3    { flex:1; display:grid; grid-template-columns:repeat(3,1fr); gap:.7em; align-items:start; align-content:start; min-height:0; }
+.g64   { flex:1; display:grid; grid-template-columns:6fr 4fr;   gap:.7em; align-items:start; align-content:start; min-height:0; }
+.g46   { flex:1; display:grid; grid-template-columns:4fr 6fr;   gap:.7em; align-items:start; align-content:start; min-height:0; }
+/* Flex column that distributes children evenly */
+.vcol  { display:flex; flex-direction:column; gap:.6em; min-height:0; height:100%; justify-content:flex-start; }
+.vcol > * { flex:0 0 auto; min-height:0; }
+/* Stretch flex row */
+.hrow  { display:flex; gap:.6em; align-items:stretch; }
+
+/* ── Cards ──────────────────────────────────────────────── */
+.card {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:9px; padding:.72em .92em;
+  box-shadow:0 2px 10px rgba(15,52,96,.06);
+  box-sizing:border-box;
+  display:flex; flex-direction:column;   /* so inner content fills it */
+}
+.cn  { border-left:3.5px solid var(--navy);   }
+.cr  { border-left:3.5px solid var(--red);    }
+.ct  { border-left:3.5px solid var(--teal);   }
+.cg  { border-left:3.5px solid var(--gold);   }
+.cgr { border-left:3.5px solid var(--green);  }
+.cp  { border-left:3.5px solid var(--purple); }
+.ci  { border-left:3.5px solid var(--indigo); }
+
+/* ── Pill badges ─────────────────────────────────────────── */
+.pill { display:inline-block; border-radius:20px; padding:2px 9px; font-size:.72em; font-weight:700; margin:1px; white-space:nowrap; }
+.pn { background:var(--navy);   color:#fff; }
+.pr { background:var(--red);    color:#fff; }
+.pt { background:var(--teal);   color:#fff; }
+.pg { background:var(--gold);   color:#fff; }
+.pgr{ background:var(--green);  color:#fff; }
+.pi { background:var(--indigo); color:#fff; }
+
+/* ── Pipeline step boxes ─────────────────────────────────── */
+.step { border-radius:7px; padding:.4em .56em; text-align:center; border:1.5px solid var(--border); font-size:.72em; }
+.step b     { display:block; font-weight:700; }
+.step small { color:var(--muted); font-size:.85em; }
+.s-ml   { background:#e7faf7; border-color:var(--teal);   }
+.s-llm  { background:#e8f1ff; border-color:var(--indigo); }
+.s-tool { background:#fff6e5; border-color:var(--gold);   }
+.s-db   { background:#e9f9ee; border-color:var(--green);  }
+.arr { font-size:1em; color:var(--muted); display:flex; align-items:center; justify-content:center; }
+
+/* ── DB table ────────────────────────────────────────────── */
+.dbt { width:100%; border-collapse:collapse; font-size:.69em; }
+.dbt th { background:var(--navy); color:#fff; padding:4px 8px; text-align:left; }
+.dbt td { padding:3px 8px; border-bottom:1px solid var(--border); }
+.dbt tr:nth-child(even) td { background:#f4f7fb; }
+.pk { color:var(--gold); font-weight:700; }
+.fk { color:var(--teal); }
+
+/* ── Timing bar (agenda) ─────────────────────────────────── */
+.tr-row { display:flex; align-items:center; gap:.5em; font-size:.82em; flex:1; }
+.tr-bar { height:9px; border-radius:5px; min-width:4px; }
+.tr-lbl { min-width:175px; }
+.tr-min { color:var(--muted); font-size:.9em; }
+
+/* ── Utility ─────────────────────────────────────────────── */
+.muted   { color:var(--muted); flex-shrink:0; }
+.accent  { color:var(--red); font-weight:700; }
+.icon    { font-size:1.45em; line-height:1; display:block; margin-bottom:.2em; }
+.ctr     { text-align:center; }
+.small   { font-size:.74em; }
+.sh0     { flex-shrink:0; }   /* never compress this element */
+
+/* ── Footer & dark slides ────────────────────────────────── */
+.foot { position:fixed; bottom:12px; right:22px; z-index:9998; font-size:.58em; color:var(--muted); pointer-events:none; }
+
+/* Normalize tiny inline text sizes for consistency across slides */
+.reveal .slides section p[style*="font-size:.6"],
+.reveal .slides section p[style*="font-size:.7"],
+.reveal .slides section li[style*="font-size:.6"],
+.reveal .slides section li[style*="font-size:.7"] {
+  font-size:.8em !important;
+}
+
+.reveal .slides section pre[style*="font-size:.6"] {
+  font-size:.68em !important;
+}
+
+.reveal .slides section.dark {
+  background: linear-gradient(135deg,#0f3460 0%,#1b4d80 100%);
+}
+.reveal .slides section.dark h2,
+.reveal .slides section.dark p,
+.reveal .slides section.dark li { color:#e2ecf6; }
+.reveal .slides section.dark h2::after { background:var(--red); }
+.reveal .slides section.dark code { background:rgba(255,255,255,.12); color:#cfe8ff; }
+.reveal .slides section.dark .muted { color:#7aaacc; }
+</style>
+</head>
+<body>
+
+<!-- Corner brackets -->
+<div class="corner cb-tl"></div>
+<div class="corner cb-tr"></div>
+<div class="corner cb-bl"></div>
+<div class="corner cb-br"></div>
+<div class="foot">Assort Design &nbsp;·&nbsp; Madrigal Pharmaceuticals — Panel Interview</div>
+
+<div class="reveal"><div class="slides">
+
+<!-- ════════════════════════════════ 1 TITLE -->
+<section class="dark" style="text-align:center; justify-content:center; align-items:center;">
+  <p style="font-size:.62em; color:#7aaacc; letter-spacing:.1em; text-transform:uppercase; margin-bottom:.4em; flex-shrink:0;">Panel Interview Demo</p>
+  <h1 style="color:#fff; font-size:2.3em; flex-shrink:0;">Assort Design</h1>
+  <p style="font-size:.95em; color:#a8cae0; font-weight:500; flex-shrink:0; margin-bottom:.6em;">AI Document Intelligence for Life Sciences</p>
+  <p style="font-size:.71em; color:#7aaacc; max-width:600px; flex-shrink:0; margin-bottom:1.2em;">
+    Ingests pharma documents · auto-routes to the right audience ·<br>generates structured, compliance-aware intelligence
+  </p>
+  <div style="flex-shrink:0; margin-bottom:1.4em;">
+    <span class="pill" style="background:rgba(233,69,96,.25);color:#f4a0b0;">Medical Affairs</span>
+    <span class="pill" style="background:rgba(255,255,255,.1);color:#cce4ff;">Commercial</span>
+    <span class="pill" style="background:rgba(32,178,170,.25);color:#7de8e4;">R&amp;D</span>
+    <span class="pill" style="background:rgba(244,163,64,.25);color:#fcd99a;">Compliance Risk</span>
+    <span class="pill" style="background:rgba(76,111,255,.25);color:#a0b8ff;">ML Router</span>
+    <span class="pill" style="background:rgba(124,58,237,.25);color:#c4a8f8;">LangGraph</span>
+  </div>
+  <p style="font-size:.64em; color:#4a7299; flex-shrink:0;">
+    Live: <code style="background:rgba(255,255,255,.1); color:#fff;">assortdemo.duckdns.org</code>
+    &nbsp;·&nbsp; FastAPI · SQLite · OpenAI · scikit-learn · LangGraph
+  </p>
+</section>
+
+<!-- ════════════════════════════════ 2 AGENDA -->
+<section>
+  <h2>What We'll Cover</h2>
+  <div class="body" style="justify-content:space-around;">
+    <div class="tr-row"><div class="tr-bar" style="width:50px;background:var(--indigo);"></div><span class="tr-lbl">The Problem &amp; Solution</span><span class="tr-min">~2 min</span></div>
+    <div class="tr-row"><div class="tr-bar" style="width:85px;background:var(--red);"></div><span class="tr-lbl">Live App Walkthrough</span><span class="tr-min">~4 min &nbsp;<span class="muted small">assortdemo.duckdns.org → localhost</span></span></div>
+    <div class="tr-row"><div class="tr-bar" style="width:70px;background:var(--teal);"></div><span class="tr-lbl">LangGraph Pipeline</span><span class="tr-min">~3 min</span></div>
+    <div class="tr-row"><div class="tr-bar" style="width:65px;background:var(--gold);"></div><span class="tr-lbl">ML Router Deep Dive</span><span class="tr-min">~3 min</span></div>
+    <div class="tr-row"><div class="tr-bar" style="width:50px;background:var(--green);"></div><span class="tr-lbl">Tools — Citations &amp; Risk</span><span class="tr-min">~2 min</span></div>
+    <div class="tr-row"><div class="tr-bar" style="width:48px;background:var(--purple);"></div><span class="tr-lbl">Data Model (SQL)</span><span class="tr-min">~2 min</span></div>
+    <div class="tr-row"><div class="tr-bar" style="width:38px;background:var(--navy);"></div><span class="tr-lbl">Q &amp; A</span><span class="tr-min">~3 min</span></div>
+    <p class="muted" style="font-size:.66em;">Total: ~19 min</p>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 3 PROBLEM -->
+<section>
+  <h2>The Problem</h2>
+  <div class="g2">
+    <div class="card cr">
+      <h3>Document Overload</h3>
+      <p>Pharma teams receive a constant stream of clinical briefings, commercial memos, R&amp;D protocols, and regulatory updates — mostly unstructured text with no clear owner.</p>
+    </div>
+    <div class="card cn">
+      <h3>Audience Mismatch</h3>
+      <p>The same document means different things to Medical Affairs, Commercial, and R&amp;D. A one-size summary serves no one well and wastes expert time.</p>
+    </div>
+    <div class="card cg">
+      <h3>Compliance Risk</h3>
+      <p>Off-label promotion, absolute efficacy claims, safety minimisation — real regulatory and legal exposures buried in everyday content, invisible until it's too late.</p>
+    </div>
+    <div class="card ct">
+      <h3>Manual Triage</h3>
+      <p>Without tooling, routing and summarisation is slow and inconsistent. Knowledge doesn't accumulate across teams — it evaporates with whoever read it.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 4 SOLUTION -->
+<section>
+  <h2>Assort Design — What It Does</h2>
+  <div class="g3">
+    <div class="card cn ctr">
+      <span class="icon">📥</span>
+      <h3>Ingest</h3>
+      <p>Paste text, submit a URL, or upload a file. Document stored and queued for processing immediately.</p>
+    </div>
+    <div class="card cr ctr">
+      <span class="icon">🎯</span>
+      <h3>Route</h3>
+      <p>TF-IDF + LR classifier picks the audience — Commercial, Medical Affairs, or R&amp;D. LLM fallback for ambiguous cases.</p>
+    </div>
+    <div class="card ct ctr">
+      <span class="icon">✍️</span>
+      <h3>Generate</h3>
+      <p>Specialist agent writes a tailored summary, decision bullets, key clues, and mind map — audience-specific.</p>
+    </div>
+    <div class="card cg ctr">
+      <span class="icon">✅</span>
+      <h3>Evaluate</h3>
+      <p>Evaluator agent checks output quality. Fails? Pipeline revises automatically — up to 2 retries.</p>
+    </div>
+    <div class="card cgr ctr">
+      <span class="icon">🔍</span>
+      <h3>Validate</h3>
+      <p>Citation Finder grounds claims to source text. Risk Checker scans for pharma compliance flags.</p>
+    </div>
+    <div class="card cp ctr">
+      <span class="icon">💾</span>
+      <h3>Persist</h3>
+      <p>All attempts, tags, citations, risk flags stored in SQLite — fully auditable and queryable.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 5 LIVE DEMO -->
+<section class="dark" style="text-align:center; justify-content:center; align-items:center;">
+  <h2 style="justify-content:center; flex-shrink:0;">Live Demo</h2>
+  <p style="color:#a8cae0; flex-shrink:0; margin-bottom:.6em;">Starting with the live deployment</p>
+  <div style="background:rgba(255,255,255,.08); border-radius:12px; padding:.85em 2.5em; display:inline-block; margin-bottom:1.2em; flex-shrink:0;">
+    <code style="color:#7dd3fc; font-size:1.1em;">assortdemo.duckdns.org</code>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:.7em; width:100%; text-align:left; flex-shrink:0;">
+    <div style="background:rgba(233,69,96,.15); border-radius:9px; padding:.75em 1em;">
+      <p style="color:#f4a0b0; font-weight:700; font-size:.71em; margin-bottom:.3em;">Step 1 — Ingest</p>
+      <p style="color:#cde0f0; font-size:.68em;">Submit a pharma briefing via paste or URL. Watch the pipeline process it live.</p>
+    </div>
+    <div style="background:rgba(244,163,64,.15); border-radius:9px; padding:.75em 1em;">
+      <p style="color:#fcd99a; font-weight:700; font-size:.71em; margin-bottom:.3em;">Step 2 — Route</p>
+      <p style="color:#cde0f0; font-size:.68em;">See routing decision: ML confidence score, routing source, top TF-IDF signals.</p>
+    </div>
+    <div style="background:rgba(60,179,113,.15); border-radius:9px; padding:.75em 1em;">
+      <p style="color:#8de8b8; font-weight:700; font-size:.71em; margin-bottom:.3em;">Step 3 — Inspect</p>
+      <p style="color:#cde0f0; font-size:.68em;">Output: bullets, tags, citations, risk flags, mind map, attempt history.</p>
+    </div>
+  </div>
+  <p style="color:#4a7299; margin-top:1.2em; font-size:.64em; flex-shrink:0;">Then switching to localhost + codebase →</p>
+</section>
+
+<!-- ════════════════════════════════ 6 ARCHITECTURE -->
+<section>
+  <h2>Architecture Overview</h2>
+  <div class="g64">
+    <div class="vcol">
+      <div class="card cn">
+        <h3>Web Layer — FastAPI + Jinja2</h3>
+        <p>RESTful routes + server-rendered HTML. Handles document ingestion, job submission, and all UI pages. Mermaid.js served locally for pipeline diagrams.</p>
+      </div>
+      <div class="card cr">
+        <h3>Pipeline — LangGraph</h3>
+        <p>A compiled <code>StateGraph</code> with 9 nodes. State is a plain Python <code>dict</code> passed through each node. Conditional edges handle pass / retry / persist.</p>
+      </div>
+      <div class="card ct">
+        <h3>Data — SQLite + SQLModel</h3>
+        <p>10 tables. SQLModel combines Pydantic validation with SQLAlchemy ORM. Single-file DB — easy to ship, inspect, and back up.</p>
+      </div>
+    </div>
+    <div class="card" style="padding:.85em 1em; justify-content:space-around;">
+      <p style="font-weight:700; color:var(--navy); text-align:center; font-size:.71em; flex-shrink:0;">Request Flow</p>
+      <div class="step s-llm"><b>Browser / Client</b></div>
+      <div class="arr">↓</div>
+      <div class="step s-llm"><b>FastAPI Route</b><small>app/main.py</small></div>
+      <div class="arr">↓</div>
+      <div class="step s-ml"><b>run_job_pipeline()</b><small>app/graph.py — LangGraph</small></div>
+      <div class="arr">↓</div>
+      <div class="step s-tool"><b>OpenAI API</b><small>app/llm.py</small></div>
+      <div class="arr">↓</div>
+      <div class="step s-db"><b>SQLite</b><small>data/asort_design.db</small></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 7 LANGGRAPH PIPELINE -->
+<section>
+  <h2>The LangGraph Pipeline</h2>
+  <p class="muted sh0" style="font-size:.64em; margin-bottom:.45em;">9 nodes · compiled <code>StateGraph(dict)</code> · conditional retry loop · timeout guard</p>
+
+  <div class="body" style="justify-content:space-around;">
+    <!-- Row 1 -->
+    <div style="display:grid; grid-template-columns:1fr 22px 1fr 22px 1fr 22px 1fr; gap:.22em; align-items:center;">
+      <div class="step s-ml"><b>route_audience</b><small>ML → LLM fallback</small></div>
+      <div class="arr">→</div>
+      <div class="step s-llm"><b>specialist_generate</b><small>audience-aware LLM</small></div>
+      <div class="arr">→</div>
+      <div class="step s-llm"><b>evaluate</b><small>quality gate LLM</small></div>
+      <div class="arr">→</div>
+      <div class="step s-tool"><b>tool_citation</b><small>grounding</small></div>
+    </div>
+
+    <!-- Down arrow right side -->
+    <div style="display:grid; grid-template-columns:1fr 22px 1fr 22px 1fr 22px 1fr; gap:.22em;">
+      <div></div><div></div><div></div><div></div><div></div><div></div>
+      <div class="arr">↓</div>
+    </div>
+
+    <!-- Row 2 -->
+    <div style="display:grid; grid-template-columns:1fr 22px 1fr 22px 1fr 22px 1fr; gap:.22em; align-items:center;">
+      <div class="step s-db"><b>persist_results</b><small>final write</small></div>
+      <div class="arr">←</div>
+      <div class="step s-db"><b>persist_attempt</b><small>each attempt</small></div>
+      <div class="arr">←</div>
+      <div class="step s-tool"><b>tool_gate</b><small>risk + citation gate</small></div>
+      <div class="arr">←</div>
+      <div class="step s-tool"><b>tool_risk</b><small>compliance check</small></div>
+    </div>
+
+    <!-- Conditional edge card -->
+    <div class="card cr sh0" style="padding:.5em .8em;">
+      <p style="margin:0; font-size:.68em;"><strong>Conditional edge</strong> after <code>persist_attempt</code>:
+        <code>passed=True</code> → <strong>persist_results</strong>
+        &nbsp;|&nbsp; <code>attempt_no ≤ max_retries</code> → <strong>revise</strong> → back to <strong>specialist_generate</strong>
+        &nbsp;|&nbsp; else → <strong>persist_results</strong> (failed)</p>
+    </div>
+
+    <!-- Legend pills -->
+    <div style="display:flex; gap:.8em; flex-wrap:wrap; font-size:.65em;">
+      <span><span class="pill pt">ML</span> route_audience</span>
+      <span><span class="pill pi">LLM</span> specialist_generate, evaluate</span>
+      <span><span class="pill pg">Tool</span> citation · risk · gate</span>
+      <span><span class="pill pgr">DB</span> persist_attempt · persist_results</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 8 ROUTING -->
+<section>
+  <h2>Routing Intelligence</h2>
+  <div class="g46">
+    <div class="vcol">
+      <div class="card ct">
+        <h3>Mode A — ML Router (Primary)</h3>
+        <p><strong>Algorithm:</strong> TF-IDF vectorizer + Logistic Regression</p>
+        <p><strong>Classes:</strong> <code>commercial</code> · <code>medical_affairs</code> · <code>r_and_d</code></p>
+        <ul>
+          <li>Top-class probability &lt; <code>threshold</code> → cross-functional</li>
+          <li>Margin between top-2 &lt; <code>margin</code> → cross-functional</li>
+          <li>Otherwise → top class wins</li>
+          <li>Returns top 5 TF-IDF signals per prediction</li>
+        </ul>
+      </div>
+      <div class="card cn">
+        <h3>Mode B — LLM Fallback</h3>
+        <p>When ML is uncertain, <code>route_audience()</code> calls the LLM and parses JSON with <code>audience</code>, <code>confidence</code>, <code>candidates</code>, <code>reasons</code>.</p>
+      </div>
+      <div class="card cg">
+        <h3>Auto-Retrain</h3>
+        <p>Every <code>RETRAIN_EVERY_N_JOBS</code> (default 20) completed jobs, <code>_maybe_retrain()</code> fires automatically. No manual intervention required.</p>
+      </div>
+    </div>
+<pre><code class="python"># graph.py — route_audience_node
+
+ml_result = _ml_router.predict(
+    document.content,
+    threshold,   # e.g. 0.60
+    margin       # e.g. 0.15
+)
+
+if ml_result["audience"] != "cross_functional":
+    # ML confident — skip LLM entirely
+    routing_source = "ml"
+    audience   = ml_result["audience"]
+    confidence = ml_result["confidence"]
+    signals    = ml_result["top_signals"]
+    # e.g. ["clinical", "patient", "safety"]
+else:
+    # ML uncertain → LLM fallback
+    routing_source = "ml+llm_fallback"
+    audience, confidence, ... = \
+        _parse_llm_routing(...)
+
+# Every decision persisted for audit trail
+job.routing_source     = routing_source
+job.routing_confidence = confidence
+job.router_version     = ml_result["router_version"]
+# stored: "ml" | "llm" | "ml+llm_fallback"</code></pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 9 ML ROUTER INTERNALS -->
+<section>
+  <h2>ML Router — Under the Hood</h2>
+  <div class="g46">
+    <div class="vcol">
+      <div class="card ct">
+        <h3>Artifacts (on disk)</h3>
+        <ul>
+          <li><code>artifacts/vectorizer.pkl</code></li>
+          <li><code>artifacts/classifier.pkl</code></li>
+          <li><code>artifacts/metadata.json</code>
+            <span class="muted small"> — accuracy, n_docs, trained_at</span></li>
+        </ul>
+      </div>
+      <div class="card cn">
+        <h3>Lazy Singleton</h3>
+        <p>Module-level <code>_ml_router = MLRouter()</code>. Loaded once on first predict call. <code>reload()</code> hot-swaps artifacts after auto-retrain — no server restart needed.</p>
+      </div>
+      <div class="card cg">
+        <h3>Explainability</h3>
+        <p><code>explain(text)</code> returns per-term TF-IDF × weight contributions for predicted class and runner-up — shown on the ML Router Insights page.</p>
+      </div>
+    </div>
+<pre><code class="python"># ml_router.py — predict()
+
+X     = vectorizer.transform([text])
+proba = classifier.predict_proba(X)[0]
+
+prob_map = {cls: proba[i]
+            for i, cls in enumerate(cls_order)}
+
+sorted_cls = sorted(prob_map.items(),
+                    key=lambda kv: kv[1],
+                    reverse=True)
+p1_label, p1 = sorted_cls[0]  # top class
+_,        p2 = sorted_cls[1]  # runner-up
+
+# Two-level confidence gate
+if p1 < threshold:
+    audience = "cross_functional"
+    reason = f"low confidence ({p1:.0%})"
+
+elif (p1 - p2) < margin:
+    audience = "cross_functional"
+    reason = (f"ambiguous: {p1_label} {p1:.0%}"
+              f" vs {sorted_cls[1][0]} {p2:.0%}")
+else:
+    audience = p1_label   # confident single pick
+
+# Top 5 TF-IDF features for winning class
+signals = _top_features(
+    vectorizer, classifier,
+    class_idx=cls_order.index(p1_label),
+    n=5
+)</code></pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 10 CITATION FINDER -->
+<section>
+  <h2>Tools Layer — Citation Finder</h2>
+  <div class="g46">
+    <div class="vcol">
+      <div class="card cg">
+        <h3>What it does</h3>
+        <p>For each generated decision bullet, <code>citation_finder()</code> locates the best-matching span in the source document — grounding AI output to the original text.</p>
+      </div>
+      <div class="card cn">
+        <h3>Algorithm (in order)</h3>
+        <ol>
+          <li>Exact substring match → confidence <strong>0.90</strong></li>
+          <li>Token-overlap: <code>|overlap| / |claim_tokens|</code></li>
+          <li>Score ≥ 0.25 → accepted (conf 0.40–0.85)</li>
+          <li>Below 0.25 → ungrounded (conf 0.20)</li>
+        </ol>
+      </div>
+      <div class="card cr">
+        <h3>Quality Gate Impact</h3>
+        <p>If &lt; 3 grounded citations <em>and</em> high-risk flags exist → pipeline <strong>hard-fails</strong> and forces a revision cycle.</p>
+      </div>
+    </div>
+<pre><code class="python"># tools.py — citation_finder (simplified)
+
+for claim in claims[:8]:
+    claim_tokens = _tokenize(claim)
+
+    # 1. Exact match — fastest path
+    idx = source_text.lower().find(claim.lower())
+    if idx != -1:
+        results.append(CitationResult(
+            confidence=0.90, ...))
+        continue
+
+    # 2. Token-overlap scoring
+    best_score = 0.0
+    for sentence, start, end in sentences:
+        sent_tokens = _tokenize(sentence)
+        overlap = claim_tokens & sent_tokens
+        score = len(overlap) / len(claim_tokens)
+        if score > best_score:
+            best_score = score
+            best = (sentence, start, end)
+
+    # 3. Accept or mark ungrounded
+    if best and best_score >= 0.25:
+        results.append(CitationResult(
+            confidence=min(0.85, 0.4+best_score),
+            ...))
+    else:
+        results.append(CitationResult(
+            confidence=0.20, quote_text=""))</code></pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 11 RISK CHECKER -->
+<section>
+  <h2>Tools Layer — Pharma Risk Checker</h2>
+  <div class="g46">
+    <div class="vcol">
+      <p class="sh0" style="font-size:.69em;">Pure Python regex engine — no LLM, zero extra latency — scanning both source and generated bullets.</p>
+      <div class="card cr">
+        <h3>HIGH Severity</h3>
+        <ul>
+          <li>Absolute efficacy — <em>"will cure", "100% efficacy"</em></li>
+          <li>Off-label promotion — <em>"unapproved indication"</em></li>
+          <li>Safety minimisation — <em>"minor side effects"</em></li>
+          <li>Boxed warning not prominently disclosed</li>
+        </ul>
+      </div>
+      <div class="card cg">
+        <h3>MEDIUM Severity</h3>
+        <ul>
+          <li>Comparative — <em>"best-in-class", "superior to"</em></li>
+          <li>Cross-trial comparison without head-to-head data</li>
+          <li>Patient testimonials as clinical evidence</li>
+        </ul>
+      </div>
+      <div class="card ct">
+        <h3>LOW Severity</h3>
+        <ul>
+          <li>Missing limitation language (no "may/might/suggests")</li>
+          <li>Efficacy without safety context</li>
+          <li>Undisclosed KOL / conflict of interest</li>
+        </ul>
+      </div>
+    </div>
+<pre><code class="python"># tools.py — risk_checker (key rules)
+
+# HIGH: off-label promotion
+_off_label = re.compile(
+    r"\b(off[\-\s]label"
+    r"|unapproved\s+indication"
+    r"|not\s+(yet\s+)?approved\s+for\s+\w+"
+    r")\b", re.I)
+
+# MEDIUM: comparative claims
+_comparative = re.compile(
+    r"\b(best[\-\s]in[\-\s]class"
+    r"|superior(\s+to)?"
+    r"|gold\s+standard"
+    r"|only\s+(drug|therapy|treatment)"
+    r")\b", re.I)
+
+# LOW: missing limitation language
+_caution = re.compile(
+    r"\b(may|might|could|suggests?"
+    r"|preliminary|potential"
+    r")\b", re.I)
+
+if not _caution.search(output):
+    flags.append(RiskFlag(
+        severity="low",
+        category="missing limitation language",
+        suggested_fix="Add qualifiers such as "
+                      "'data suggest' or 'preliminary'."
+    ))
+
+# Returns: severity · category
+#          · text_span · suggested_fix
+# Stored as DocumentRiskFlag rows in SQLite</code></pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 12 DATA MODEL -->
+<section>
+  <h2>Data Model — SQLite Schema</h2>
+  <p class="muted sh0" style="font-size:.63em; margin-bottom:.35em;">10 tables · SQLModel (Pydantic + SQLAlchemy) · <code>data/asort_design.db</code></p>
+  <div class="g2">
+    <!-- Left column -->
+    <div class="vcol">
+      <table class="dbt">
+        <tr><th colspan="3">document</th></tr>
+        <tr><td class="pk">id</td><td>INTEGER PK</td><td>primary key</td></tr>
+        <tr><td>content</td><td>TEXT</td><td>raw source text</td></tr>
+        <tr><td>source_type</td><td>TEXT</td><td>text | url | file</td></tr>
+        <tr><td>created_at</td><td>DATETIME</td><td></td></tr>
+      </table>
+      <table class="dbt">
+        <tr><th colspan="3">job</th></tr>
+        <tr><td class="pk">id</td><td>INTEGER PK</td><td></td></tr>
+        <tr><td class="fk">document_id</td><td>FK → document</td><td></td></tr>
+        <tr><td>audience</td><td>TEXT</td><td>resolved audience</td></tr>
+        <tr><td>routing_confidence</td><td>FLOAT</td><td>0.0–1.0</td></tr>
+        <tr><td>routing_source</td><td>TEXT</td><td>ml | llm | ml+llm_fallback</td></tr>
+        <tr><td>router_version</td><td>TEXT</td><td>model trained_at</td></tr>
+        <tr><td>status</td><td>TEXT</td><td>pending|running|completed|failed</td></tr>
+        <tr><td>attempt_count</td><td>INT</td><td>retries used</td></tr>
+      </table>
+      <table class="dbt">
+        <tr><th colspan="3">jobattempt</th></tr>
+        <tr><td class="pk">id</td><td>INTEGER PK</td><td></td></tr>
+        <tr><td class="fk">job_id</td><td>FK → job</td><td></td></tr>
+        <tr><td>attempt_no</td><td>INT</td><td>1, 2, 3…</td></tr>
+        <tr><td>generated_bullets_json</td><td>TEXT</td><td>JSON array</td></tr>
+        <tr><td>evaluator_json</td><td>TEXT</td><td>pass/fail + reasons</td></tr>
+        <tr><td>passed</td><td>BOOL</td><td></td></tr>
+      </table>
+    </div>
+    <!-- Right column -->
+    <div class="vcol">
+      <table class="dbt">
+        <tr><th colspan="3">tag + documenttag (many-to-many)</th></tr>
+        <tr><td class="pk">tag.id</td><td>PK</td><td>unique tag</td></tr>
+        <tr><td>tag.name</td><td>TEXT UNIQUE</td><td>e.g. "oncology"</td></tr>
+        <tr><td class="fk">documenttag.document_id</td><td>FK</td><td>join table</td></tr>
+        <tr><td class="fk">documenttag.tag_id</td><td>FK</td><td></td></tr>
+      </table>
+      <table class="dbt">
+        <tr><th colspan="3">documentclaim (citations)</th></tr>
+        <tr><td class="pk">id</td><td>PK</td><td></td></tr>
+        <tr><td class="fk">document_id / job_id</td><td>FK</td><td></td></tr>
+        <tr><td>claim_text</td><td>TEXT</td><td>the bullet</td></tr>
+        <tr><td>quote_text</td><td>TEXT</td><td>matched source span</td></tr>
+        <tr><td>confidence</td><td>FLOAT</td><td>0.20–0.90</td></tr>
+      </table>
+      <table class="dbt">
+        <tr><th colspan="3">documentriskflag</th></tr>
+        <tr><td class="pk">id</td><td>PK</td><td></td></tr>
+        <tr><td class="fk">document_id / job_id</td><td>FK</td><td></td></tr>
+        <tr><td>severity</td><td>TEXT</td><td>high | medium | low</td></tr>
+        <tr><td>category</td><td>TEXT</td><td>e.g. off-label promotion</td></tr>
+        <tr><td>text_span</td><td>TEXT</td><td>matched phrase</td></tr>
+        <tr><td>suggested_fix</td><td>TEXT</td><td>remediation advice</td></tr>
+      </table>
+      <table class="dbt">
+        <tr><th colspan="3">tagalias + documenttagsummary</th></tr>
+        <tr><td>alias</td><td>TEXT UNIQUE</td><td>variant → canonical</td></tr>
+        <tr><td>domain</td><td>TEXT</td><td>commercial | med | r&amp;d</td></tr>
+        <tr><td>canonical_tags_json</td><td>TEXT</td><td>normalised tags</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 13 TAG INTELLIGENCE -->
+<section>
+  <h2>Tag Intelligence</h2>
+  <div class="g46">
+    <div class="vcol">
+      <div class="card cn">
+        <h3>Co-occurrence Pairs</h3>
+        <p>Tags that appear together across documents — reveals what topics cluster in your pipeline across teams.</p>
+      </div>
+      <div class="card cr">
+        <h3>Jaccard Similarity</h3>
+        <p><code>|A ∩ B| / |A ∪ B|</code> — how similar two documents are by tag overlap. Finds functionally related content without reading it.</p>
+      </div>
+      <div class="card ct">
+        <h3>Bridge Tags</h3>
+        <p>Tags that appear across <em>multiple audience domains</em> — cross-functional signals that matter to everyone simultaneously.</p>
+      </div>
+      <div class="card cg">
+        <h3>Tag Aliases</h3>
+        <p>"PD-L1" and "PDL1" resolve to the same canonical tag. Editable via the UI — no code changes needed.</p>
+      </div>
+    </div>
+<pre><code class="python"># tag_intel.py
+
+def compute_cooccurrence_pairs(session):
+    """Tags that appear together."""
+    doc_tag_map = defaultdict(set)
+    for dt in session.exec(select(DocumentTag)):
+        doc_tag_map[dt.document_id].add(dt.tag_id)
+    pairs = Counter()
+    for tags in doc_tag_map.values():
+        for a, b in combinations(sorted(tags), 2):
+            pairs[(a, b)] += 1
+    return pairs.most_common(20)
+
+
+def compute_jaccard(tags_a: set,
+                    tags_b: set) -> float:
+    if not tags_a or not tags_b:
+        return 0.0
+    return len(tags_a & tags_b) / len(tags_a | tags_b)
+
+
+def compute_bridge_tags(session):
+    """Tags appearing in 2+ audience domains."""
+    domain_tags = defaultdict(set)
+    for s in session.exec(
+            select(DocumentTagSummary)):
+        tags = json.loads(s.canonical_tags_json)
+        for t in tags:
+            domain_tags[t].add(s.domain)
+    return {t: ds
+            for t, ds in domain_tags.items()
+            if len(ds) >= 2}</code></pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 14 AUTO-RETRAIN -->
+<section>
+  <h2>The Self-Improving Loop</h2>
+  <div class="g46">
+    <div class="vcol">
+      <div class="card ct">
+        <h3>How it works</h3>
+        <ol>
+          <li>Every completed job with resolved audience = a <strong>labeled training example</strong></li>
+          <li>After N new completions, <code>_maybe_retrain()</code> fires automatically</li>
+          <li><code>train_model()</code> re-fits TF-IDF + LR on the full corpus</li>
+          <li>New <code>.pkl</code> artifacts written; <code>_ml_router.reload()</code> hot-swaps in memory</li>
+        </ol>
+      </div>
+      <div class="card cg">
+        <h3>The feedback signal</h3>
+        <p>LLM routing decisions act as <em>weak labels</em> for ML training. As confident decisions accumulate, ML takes over — reducing LLM calls, latency, and cost over time.</p>
+      </div>
+      <div class="card cn">
+        <h3>Thread-safe design</h3>
+        <p>A <code>threading.Lock</code> ensures concurrent requests don't trigger parallel retrains. Non-fatal — app continues with previous model if training fails.</p>
+      </div>
+    </div>
+<pre><code class="python"># graph.py — _maybe_retrain()
+
+_RETRAIN_EVERY_N_JOBS = int(
+    os.getenv("RETRAIN_EVERY_N_JOBS", "20"))
+_retrain_lock = threading.Lock()
+
+def _maybe_retrain(session: Session) -> None:
+    completed = session.exec(
+        select(Job)
+        .where(Job.status == "completed")
+        .where(Job.audience.in_([
+            "commercial",
+            "medical_affairs",
+            "r_and_d"
+        ]))
+    ).all()
+    n_completed = len(completed)
+
+    last_n = json.load(metadata_file)\
+                 .get("n_docs", 0)
+    new_since = n_completed - last_n
+
+    if new_since < _RETRAIN_EVERY_N_JOBS:
+        return   # not enough new data yet
+
+    # One retrain at a time — non-blocking
+    if not _retrain_lock.acquire(blocking=False):
+        return
+
+    try:
+        result = train_model(min_samples=10)
+        if result:
+            _ml_router.reload()  # hot-swap
+    finally:
+        _retrain_lock.release()</code></pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 15 WHY MADRIGAL -->
+<section>
+  <h2>Why This Matters for Madrigal</h2>
+  <div class="g3">
+    <div class="card cn ctr">
+      <span class="icon">🧬</span>
+      <h3>Domain Fit</h3>
+      <p>Built for pharma document types. Risk checker tuned to life-sciences compliance — off-label, absolute efficacy, boxed warnings — out of the box.</p>
+    </div>
+    <div class="card cr ctr">
+      <span class="icon">⚙️</span>
+      <h3>Engineering Depth</h3>
+      <p>Full-stack ownership: ML pipeline, LLM orchestration, compliance tooling, schema design, FastAPI, and a self-improving retrain loop.</p>
+    </div>
+    <div class="card ct ctr">
+      <span class="icon">📈</span>
+      <h3>Extensibility</h3>
+      <p>New audience → <code>agent_profiles.yaml</code>. New risk rule → one regex block. New pipeline node → one <code>add_node()</code> call.</p>
+    </div>
+    <div class="card cg ctr">
+      <span class="icon">🔍</span>
+      <h3>Auditability</h3>
+      <p>Every routing decision persisted: source, confidence, model version, signals. Full lineage from raw document to final output.</p>
+    </div>
+    <div class="card cgr ctr">
+      <span class="icon">🚀</span>
+      <h3>Production-Ready</h3>
+      <p>Dockerized, CI/CD via GitHub Actions, timeout guards, thread-safe retrain, schema versioning, live on DuckDNS.</p>
+    </div>
+    <div class="card cp ctr">
+      <span class="icon">🤝</span>
+      <h3>Cross-Functional</h3>
+      <p>One document generates intelligence for Commercial, Medical Affairs, and R&amp;D simultaneously — built for cross-team collaboration.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 16 CODEBASE MAP -->
+<section>
+  <h2>Codebase at a Glance</h2>
+  <div class="g2">
+<pre style="font-size:.62em;"><code>AsortDesing/
+├── app/
+│   ├── main.py          ← FastAPI routes + UI endpoints
+│   ├── graph.py         ← LangGraph pipeline (9 nodes)
+│   ├── ml_router.py     ← TF-IDF + LR singleton
+│   ├── train_router.py  ← model training from DB labels
+│   ├── llm.py           ← OpenAI wrappers
+│   ├── tools.py         ← citation_finder + risk_checker
+│   ├── models.py        ← SQLModel table definitions
+│   ├── tag_intel.py     ← co-occurrence, Jaccard, bridges
+│   ├── config.py        ← routing + evaluation config
+│   └── agent_profiles.yaml
+│
+├── templates/           ← Jinja2 HTML pages
+├── static/              ← mermaid.min.js, favicon
+├── artifacts/           ← vectorizer.pkl, classifier.pkl
+├── data/                ← asort_design.db
+├── tests/               ← pytest suite
+├── Dockerfile
+└── .github/workflows/   ← CI: tests + docker-publish</code></pre>
+    <div class="vcol">
+      <div class="card cn">
+        <h3>Key lines for the code tour</h3>
+        <ul>
+          <li><code>graph.py:150</code> — <code>run_job_pipeline()</code></li>
+          <li><code>graph.py:109</code> — <code>_build_graph()</code></li>
+          <li><code>ml_router.py:67</code> — <code>predict()</code></li>
+          <li><code>ml_router.py:188</code> — <code>explain()</code></li>
+          <li><code>tools.py:75</code> — <code>citation_finder()</code></li>
+          <li><code>tools.py:154</code> — <code>risk_checker()</code></li>
+          <li><code>models.py:26</code> — <code>Job</code> — routing fields</li>
+        </ul>
+      </div>
+      <div class="card cr">
+        <h3>Tests</h3>
+        <ul>
+          <li><code>test_pipeline_mocked.py</code> — LangGraph with mocked LLM</li>
+          <li><code>test_web_routes.py</code> — FastAPI TestClient</li>
+          <li><code>test_db_schema.py</code> — schema integrity</li>
+        </ul>
+      </div>
+      <div class="card cg">
+        <h3>CI / CD</h3>
+        <ul>
+          <li>GitHub Actions: run tests on every push</li>
+          <li>Docker image published on merge to main</li>
+          <li>Live deployment updated automatically</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ 17 CLOSING -->
+<section class="dark" style="justify-content:center;">
+  <h2 style="justify-content:center; flex-shrink:0;">Thank You</h2>
+  <div class="g2" style="flex:1; margin-top:.6em;">
+    <div style="display:flex; flex-direction:column; justify-content:space-around;">
+      <p style="color:#7aaacc; font-size:.66em; font-weight:600; text-transform:uppercase; letter-spacing:.08em; flex-shrink:0;">What we covered</p>
+      <ul style="line-height:2.1;">
+        <li>Problem — audience-fragmented pharma documents</li>
+        <li>Solution — ML + LLM hybrid routing pipeline</li>
+        <li>LangGraph — 9-node graph with conditional retry</li>
+        <li>ML Router — TF-IDF + LR with auto-retrain</li>
+        <li>Tools — citation grounding + pharma compliance</li>
+        <li>SQL schema — 10 tables, full audit trail</li>
+        <li>Tag intelligence — co-occurrence, Jaccard, bridges</li>
+      </ul>
+    </div>
+    <div style="display:flex; flex-direction:column; justify-content:space-around; padding-top:.3em;">
+      <div>
+        <p style="color:#7aaacc; font-size:.66em; font-weight:600; text-transform:uppercase; letter-spacing:.08em; margin-bottom:.6em;">Resources</p>
+        <div style="background:rgba(255,255,255,.07); border-radius:10px; padding:.7em 1.2em; margin-bottom:.7em;">
+          <p style="color:#a8cae0; font-size:.63em; margin-bottom:.15em;">Live deployment</p>
+          <code style="color:#7dd3fc;">assortdemo.duckdns.org</code>
+        </div>
+        <div style="background:rgba(255,255,255,.07); border-radius:10px; padding:.7em 1.2em;">
+          <p style="color:#a8cae0; font-size:.63em; margin-bottom:.15em;">Local source</p>
+          <code style="color:#7dd3fc;">C:\AsortDesing\</code>
+        </div>
+      </div>
+      <p style="color:#4a7299; font-size:.66em; text-align:center;">Questions welcome</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ APPENDIX A — PROFILES -->
+<section>
+  <h2>Appendix — Audience Profiles</h2>
+  <p class="muted sh0" style="font-size:.64em; margin-bottom:.4em;">Defined in <code>app/agent_profiles.yaml</code> — add a new audience with zero code changes.</p>
+  <div class="g3">
+    <div class="card cn">
+      <h3>Commercial</h3>
+      <ul>
+        <li>Prompt: market positioning, revenue, competitive landscape</li>
+        <li>Required sections: Market Opportunity · Competitive Positioning · Revenue Impact</li>
+        <li>Default max: 400 words</li>
+      </ul>
+    </div>
+    <div class="card cr">
+      <h3>Medical Affairs</h3>
+      <ul>
+        <li>Prompt: clinical evidence, safety profile, KOL strategy</li>
+        <li>Required sections: Clinical Evidence · Safety Profile · Medical Strategy</li>
+        <li>Default max: 500 words</li>
+      </ul>
+    </div>
+    <div class="card ct">
+      <h3>R&amp;D</h3>
+      <ul>
+        <li>Prompt: mechanism of action, methods, pipeline implications</li>
+        <li>Required sections: Scientific Rationale · Methods · Pipeline Implications</li>
+        <li>Default max: 600 words</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card cg sh0" style="margin-top:.55em; padding:.5em .8em;">
+    <p style="margin:0; font-size:.69em;"><strong>Cross-Functional</strong> — automatic fallback when routing confidence is below threshold or margin. Generates a balanced summary suitable for all audiences.</p>
+  </div>
+</section>
+
+<!-- ════════════════════════════════ APPENDIX B — STATE DICT -->
+<section>
+  <h2>Appendix — Pipeline State Dict</h2>
+  <p class="muted sh0" style="font-size:.64em; margin-bottom:.35em;">LangGraph state is a plain <code>dict</code> that grows as it flows through each node.</p>
+<pre><code class="python"># Initial state — injected at app.invoke()
+{ "attempt_no": 1, "max_retries": 2,
+  "fix_instructions": [],
+  "deadline": time.monotonic() + PIPELINE_TIMEOUT_SEC }
+
+# After route_audience_node
+{ "audience": "medical_affairs",
+  "required_sections": ["Clinical Evidence", "Safety Profile", "Medical Strategy"],
+  "max_words": 500,
+  "system_prompt": "You are a Medical Affairs specialist..." }
+
+# After specialist_generate_node
+{ "generated": {
+    "one_line_summary": "...",
+    "decision_bullets": ["...", "...", "..."],
+    "tags": ["oncology", "phase-3", "safety"],
+    "key_clues": ["...", "..."],
+    "mind_map": "mindmap\n  root((Summary))\n    ..." } }
+
+# After evaluate + tool_citation + tool_risk + tool_gate
+{ "passed": True,               # False → triggers revise loop
+  "citations": [...],           # List[CitationResult]
+  "risk_flags": [...],          # List[RiskFlag]
+  "support_warning": False,     # True if < 3 grounded citations
+  "fix_instructions": [...] }   # fed to next generate attempt</code></pre>
+</section>
+
+</div></div><!-- /slides /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script>
+  Reveal.initialize({
+    width:  1280,
+    height: 720,
+    margin: 0.04,
+    minScale: 0.1,
+    maxScale: 2.0,
+    hash: true,
+    slideNumber: 'c/t',
+    progress: true,
+    controls: true,
+    center: false,
+    transition: 'fade',
+    transitionSpeed: 'fast',
+    plugins: [ RevealHighlight ]
+  });
+</script>
+</body>
+</html>

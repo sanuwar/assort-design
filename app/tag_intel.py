@@ -210,9 +210,14 @@ def infer_domain(canonical_tags: Iterable[str]) -> str:
 def persist_tag_summary(
     session: Session,
     document_id: int,
-    job_id: int | None,
+    job_id: int,
     raw_tags: Iterable[str],
 ) -> Dict[str, object]:
+    if job_id is None:
+        raise ValueError(
+            "persist_tag_summary requires a non-None job_id to prevent "
+            "an unscoped DELETE that would wipe all summaries for the document."
+        )
     raw_tags = list(raw_tags or [])
     if not raw_tags:
         raw_tags = ["general"]
@@ -221,12 +226,12 @@ def persist_tag_summary(
     canonical_tags = canonicalize_tags(raw_tags, alias_map)
     domain = infer_domain(canonical_tags)
 
-    delete_stmt = delete(DocumentTagSummary).where(
-        DocumentTagSummary.document_id == document_id
+    session.exec(
+        delete(DocumentTagSummary).where(
+            DocumentTagSummary.document_id == document_id,
+            DocumentTagSummary.job_id == job_id,
+        )
     )
-    if job_id is not None:
-        delete_stmt = delete_stmt.where(DocumentTagSummary.job_id == job_id)
-    session.exec(delete_stmt)
 
     summary = DocumentTagSummary(
         document_id=document_id,

@@ -1,7 +1,16 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from sqlmodel import Field, Relationship, SQLModel
+
+
+def _utcnow() -> datetime:
+    """Return the current UTC time as a timezone-aware datetime.
+
+    Used as default_factory for all created_at fields.
+    Replaces the deprecated datetime.utcnow() which returns a naive datetime.
+    """
+    return datetime.now(timezone.utc)
 
 
 class DocumentTag(SQLModel, table=True):
@@ -16,7 +25,7 @@ class Document(SQLModel, table=True):
     content: str
     source_type: str
     source_url: Optional[str] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
     jobs: List["Job"] = Relationship(back_populates="document")
     tags: List["Tag"] = Relationship(back_populates="documents", link_model=DocumentTag)
@@ -37,7 +46,7 @@ class Job(SQLModel, table=True):
     attempt_count: int = 0
     max_words: Optional[int] = None
     max_retries: int = 2
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
     document: Optional[Document] = Relationship(back_populates="jobs")
     attempts: List["JobAttempt"] = Relationship(back_populates="job")
@@ -56,7 +65,7 @@ class JobAttempt(SQLModel, table=True):
     generated_mindmap: str
     evaluator_json: str
     passed: bool
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
     job: Optional[Job] = Relationship(back_populates="attempts")
 
@@ -72,7 +81,7 @@ class DocumentClue(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     document_id: int = Field(foreign_key="document.id", index=True)
     clue_text: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
     document: Optional[Document] = Relationship(back_populates="clues")
 
@@ -81,7 +90,7 @@ class TagAlias(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     alias: str = Field(index=True, unique=True)
     canonical: str = Field(index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class DocumentTagSummary(SQLModel, table=True):
@@ -90,7 +99,7 @@ class DocumentTagSummary(SQLModel, table=True):
     job_id: Optional[int] = Field(default=None, foreign_key="job.id", index=True)
     domain: str = Field(index=True)
     canonical_tags_json: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class DocumentClaim(SQLModel, table=True):
@@ -102,7 +111,7 @@ class DocumentClaim(SQLModel, table=True):
     source_start: Optional[int] = None
     source_end: Optional[int] = None
     confidence: float = 0.0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class DocumentRiskFlag(SQLModel, table=True):
@@ -113,4 +122,4 @@ class DocumentRiskFlag(SQLModel, table=True):
     category: str
     text_span: str
     suggested_fix: str = ""
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
